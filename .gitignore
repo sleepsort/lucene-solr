@@ -386,3 +386,9 @@
 /modules/suggest/dist
 
 /modules/spatial/build/
+
+core
+test
+framework
+codecs
+*.swp
