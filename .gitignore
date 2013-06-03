@@ -387,8 +387,8 @@
 
 /modules/spatial/build/
 
-core
-test
-framework
-codecs
+/core
+/test
+/framework
+/codecs
 *.swp
