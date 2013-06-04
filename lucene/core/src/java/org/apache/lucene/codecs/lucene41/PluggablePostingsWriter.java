@@ -50,7 +50,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * @see Lucene41SkipWriter for details about skipping setting and postings layout.
  * @lucene.experimental
  */
-public final class Lucene41PostingsWriter extends PostingsWriterBase {
+public final class PluggablePostingsWriter extends PostingsWriterBase {
 
   /** 
    * Expert: The maximum number of skip levels. Smaller values result in 
@@ -58,10 +58,10 @@ public final class Lucene41PostingsWriter extends PostingsWriterBase {
    */
   static final int maxSkipLevels = 10;
 
-  final static String TERMS_CODEC = "Lucene41PostingsWriterTerms";
-  final static String DOC_CODEC = "Lucene41PostingsWriterDoc";
-  final static String POS_CODEC = "Lucene41PostingsWriterPos";
-  final static String PAY_CODEC = "Lucene41PostingsWriterPay";
+  final static String TERMS_CODEC = "PluggablePostingsWriterTerms";
+  final static String DOC_CODEC = "PluggablePostingsWriterDoc";
+  final static String POS_CODEC = "PluggablePostingsWriterPos";
+  final static String PAY_CODEC = "PluggablePostingsWriterPay";
 
   // Increment version to change it
   final static int VERSION_START = 0;
@@ -115,7 +115,7 @@ public final class Lucene41PostingsWriter extends PostingsWriterBase {
   
   /** Creates a postings writer with the specified PackedInts overhead ratio */
   // TODO: does this ctor even make sense?
-  public Lucene41PostingsWriter(SegmentWriteState state, float acceptableOverheadRatio) throws IOException {
+  public PluggablePostingsWriter(SegmentWriteState state, float acceptableOverheadRatio) throws IOException {
     super();
 
     docOut = state.directory.createOutput(IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, Lucene41PostingsFormat.DOC_EXTENSION),
@@ -184,7 +184,7 @@ public final class Lucene41PostingsWriter extends PostingsWriterBase {
   }
 
   /** Creates a postings writer with <code>PackedInts.COMPACT</code> */
-  public Lucene41PostingsWriter(SegmentWriteState state) throws IOException {
+  public PluggablePostingsWriter(SegmentWriteState state) throws IOException {
     this(state, PackedInts.COMPACT);
   }
 

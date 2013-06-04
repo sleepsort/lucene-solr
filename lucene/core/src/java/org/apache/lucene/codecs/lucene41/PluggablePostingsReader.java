@@ -52,7 +52,7 @@ import org.apache.lucene.util.IOUtils;
  * @see Lucene41SkipReader for details
  * @lucene.experimental
  */
-public final class Lucene41PostingsReader extends PostingsReaderBase {
+public final class PluggablePostingsReader extends PostingsReaderBase {
 
   private final IndexInput docIn;
   private final IndexInput posIn;
@@ -63,7 +63,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   // public static boolean DEBUG = false;
 
   /** Sole constructor. */
-  public Lucene41PostingsReader(Directory dir, FieldInfos fieldInfos, SegmentInfo segmentInfo, IOContext ioContext, String segmentSuffix) throws IOException {
+  public PluggablePostingsReader(Directory dir, FieldInfos fieldInfos, SegmentInfo segmentInfo, IOContext ioContext, String segmentSuffix) throws IOException {
     boolean success = false;
     IndexInput docIn = null;
     IndexInput posIn = null;
@@ -373,7 +373,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
     private int singletonDocID; // docid when there is a single pulsed posting, otherwise -1
 
     public BlockDocsEnum(FieldInfo fieldInfo) throws IOException {
-      this.startDocIn = Lucene41PostingsReader.this.docIn;
+      this.startDocIn = PluggablePostingsReader.this.docIn;
       this.docIn = null;
       indexHasFreq = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS) >= 0;
       indexHasPos = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
@@ -671,9 +671,9 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
     private int singletonDocID; // docid when there is a single pulsed posting, otherwise -1
     
     public BlockDocsAndPositionsEnum(FieldInfo fieldInfo) throws IOException {
-      this.startDocIn = Lucene41PostingsReader.this.docIn;
+      this.startDocIn = PluggablePostingsReader.this.docIn;
       this.docIn = null;
-      this.posIn = Lucene41PostingsReader.this.posIn.clone();
+      this.posIn = PluggablePostingsReader.this.posIn.clone();
       encoded = new byte[MAX_ENCODED_SIZE];
       indexHasOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
       indexHasPayloads = fieldInfo.hasPayloads();
@@ -1108,10 +1108,10 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
     private int singletonDocID; // docid when there is a single pulsed posting, otherwise -1
     
     public EverythingEnum(FieldInfo fieldInfo) throws IOException {
-      this.startDocIn = Lucene41PostingsReader.this.docIn;
+      this.startDocIn = PluggablePostingsReader.this.docIn;
       this.docIn = null;
-      this.posIn = Lucene41PostingsReader.this.posIn.clone();
-      this.payIn = Lucene41PostingsReader.this.payIn.clone();
+      this.posIn = PluggablePostingsReader.this.posIn.clone();
+      this.payIn = PluggablePostingsReader.this.payIn.clone();
       encoded = new byte[MAX_ENCODED_SIZE];
       indexHasOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
       if (indexHasOffsets) {

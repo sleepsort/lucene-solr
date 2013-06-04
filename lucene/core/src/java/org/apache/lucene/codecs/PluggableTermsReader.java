@@ -86,7 +86,7 @@ import org.apache.lucene.util.fst.Util;
  * @lucene.experimental
  */
 
-public class BlockTreeTermsReader extends FieldsProducer {
+public class PluggableTermsReader extends FieldsProducer {
 
   // Open input to the main terms dict file (_X.tib)
   private final IndexInput in;
@@ -110,7 +110,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
   private final int version;
 
   /** Sole constructor. */
-  public BlockTreeTermsReader(Directory dir, FieldInfos fieldInfos, SegmentInfo info,
+  public PluggableTermsReader(Directory dir, FieldInfos fieldInfos, SegmentInfo info,
                               PostingsReaderBase postingsReader, IOContext ioContext,
                               String segmentSuffix, int indexDivisor)
     throws IOException {
@@ -461,7 +461,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
     FieldReader(FieldInfo fieldInfo, long numTerms, BytesRef rootCode, long sumTotalTermFreq, long sumDocFreq, int docCount, long indexStartFP, IndexInput indexIn) throws IOException {
       assert numTerms > 0;
       this.fieldInfo = fieldInfo;
-      //DEBUG = BlockTreeTermsReader.DEBUG && fieldInfo.name.equals("id");
+      //DEBUG = PluggableTermsReader.DEBUG && fieldInfo.name.equals("id");
       this.numTerms = numTerms;
       this.sumTotalTermFreq = sumTotalTermFreq; 
       this.sumDocFreq = sumDocFreq; 
@@ -821,7 +821,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
         // }
         runAutomaton = compiled.runAutomaton;
         compiledAutomaton = compiled;
-        in = BlockTreeTermsReader.this.in.clone();
+        in = PluggableTermsReader.this.in.clone();
         stack = new Frame[5];
         for(int idx=0;idx<stack.length;idx++) {
           stack[idx] = new Frame(idx);
@@ -1311,7 +1311,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
       // Not private to avoid synthetic access$NNN methods
       void initIndexInput() {
         if (this.in == null) {
-          this.in = BlockTreeTermsReader.this.in.clone();
+          this.in = PluggableTermsReader.this.in.clone();
         }
       }
 

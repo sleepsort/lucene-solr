@@ -174,16 +174,16 @@ import org.apache.lucene.util.packed.PackedInts;
  * @lucene.experimental
  */
 
-public class BlockTreeTermsWriter extends FieldsConsumer {
+public class PluggableTermsWriter extends FieldsConsumer {
 
   /** Suggested default value for the {@code
    *  minItemsInBlock} parameter to {@link
-   *  #BlockTreeTermsWriter(SegmentWriteState,PostingsWriterBase,int,int)}. */
+   *  #PluggableTermsWriter(SegmentWriteState,PostingsWriterBase,int,int)}. */
   public final static int DEFAULT_MIN_BLOCK_SIZE = 25;
 
   /** Suggested default value for the {@code
    *  maxItemsInBlock} parameter to {@link
-   *  #BlockTreeTermsWriter(SegmentWriteState,PostingsWriterBase,int,int)}. */
+   *  #PluggableTermsWriter(SegmentWriteState,PostingsWriterBase,int,int)}. */
   public final static int DEFAULT_MAX_BLOCK_SIZE = 48;
 
   //public final static boolean DEBUG = false;
@@ -258,7 +258,7 @@ public class BlockTreeTermsWriter extends FieldsConsumer {
    *  sub-blocks) per block will aim to be between
    *  minItemsPerBlock and maxItemsPerBlock, though in some
    *  cases the blocks may be smaller than the min. */
-  public BlockTreeTermsWriter(
+  public PluggableTermsWriter(
                               SegmentWriteState state,
                               PostingsWriterBase postingsWriter,
                               int minItemsInBlock,
