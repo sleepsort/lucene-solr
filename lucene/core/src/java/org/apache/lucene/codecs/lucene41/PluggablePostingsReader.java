@@ -26,7 +26,7 @@ import java.util.Arrays;
 
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
-import org.apache.lucene.codecs.PostingsReaderBase;
+import org.apache.lucene.codecs.PluggablePostingsReaderBase;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfo;
@@ -34,7 +34,8 @@ import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.SegmentInfo;
-import org.apache.lucene.index.TermState;
+import org.apache.lucene.index.TermMetaData;
+import org.apache.lucene.index.TermProtoData;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.Directory;
@@ -52,7 +53,7 @@ import org.apache.lucene.util.IOUtils;
  * @see Lucene41SkipReader for details
  * @lucene.experimental
  */
-public final class PluggablePostingsReader extends PostingsReaderBase {
+public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
 
   private final IndexInput docIn;
   private final IndexInput posIn;
@@ -188,7 +189,7 @@ public final class PluggablePostingsReader extends PostingsReaderBase {
   }
 
   @Override
-  public IntBlockTermState newTermState() {
+  public TermProtoData newProtoData() {
     return new IntBlockTermState();
   }
 

@@ -22,7 +22,7 @@ public abstract class PluggablePostingsReaderBase implements Closeable {
 
   public abstract DocsEnum docs(FieldInfo fieldInfo, TermMetaData state, Bits skipDocs, DocsEnum reuse, int flags) throws IOException;
 
-  public abstract DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, BlockTermState state, Bits skipDocs, DocsAndPositionsEnum reuse,
+  public abstract DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TermMetaData meta, Bits skipDocs, DocsAndPositionsEnum reuse,
                                                         int flags) throws IOException;
 
   @Override

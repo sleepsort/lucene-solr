@@ -26,7 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.lucene.codecs.CodecUtil;
-import org.apache.lucene.codecs.PostingsWriterBase;
+import org.apache.lucene.codecs.PluggablePostingsWriterBase;
 import org.apache.lucene.codecs.TermStats;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.FieldInfo;
@@ -50,7 +50,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * @see Lucene41SkipWriter for details about skipping setting and postings layout.
  * @lucene.experimental
  */
-public final class PluggablePostingsWriter extends PostingsWriterBase {
+public final class PluggablePostingsWriter extends PluggablePostingsWriterBase {
 
   /** 
    * Expert: The maximum number of skip levels. Smaller values result in 

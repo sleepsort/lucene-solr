@@ -56,8 +56,12 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
     LongsRef base1 = t1.base, base2 = t2.base;
     long[] longs1 = base1.longs, longs2 = base2.longs;
     int pos1 = base1.offset, pos2 = base2.offset;
-    int end1 = pos1 + base1.length;
+    int end1 = pos1 + base1.length, end2 = pos2 + base2.length;
     boolean order = true;
+
+    if (end1 != end2) {
+      return NO_OUTPUT;
+    }
 
     while (pos1 < end1 && longs1[pos1] == longs2[pos2]) {
       pos1++;
@@ -108,9 +112,13 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
 
     LongsRef base1 = t1.base, base2 = t2.base;
     int pos1 = base1.offset, pos2 = base2.offset;
-    int end1 = pos1 + base1.length;
+    int end1 = pos1 + base1.length, end2 = pos2 + base2.length;
     long[] share = new long[base1.length];
     int pos = 0;
+
+    if (end1 != end2) {
+      return NO_OUTPUT;
+    }
 
     while (pos1 < end1) {
       share[pos] = base1.longs[pos1] - base2.longs[pos2];
@@ -136,9 +144,12 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
 
     LongsRef base1 = t1.base, base2 = t2.base;
     int pos1 = base1.offset, pos2 = base2.offset;
-    int end1 = pos1 + base1.length;
+    int end1 = pos1 + base1.length, end2 = pos2 + base2.length;
     long[] accum = new long[base1.length];
     int pos = 0;
+
+    assert end1 == end2; // nocommit: we need this ?
+
     while (pos1 < end1) {
       accum[pos] = base1.longs[pos1] + base2.longs[pos2];
       assert(accum[pos] >= 0);
