@@ -27,15 +27,16 @@ import java.util.Arrays;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.PluggablePostingsReaderBase;
+import org.apache.lucene.codecs.TermMetaData;
+import org.apache.lucene.codecs.TermProtoData;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.IndexFileNames;
+import org.apache.lucene.index.TermState;
 import org.apache.lucene.index.SegmentInfo;
-import org.apache.lucene.index.TermMetaData;
-import org.apache.lucene.index.TermProtoData;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.Directory;
@@ -189,8 +190,20 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
   }
 
   @Override
-  public TermProtoData newProtoData() {
-    return new IntBlockTermState();
+  public TermProtoData newProtoData(FieldInfo info) {
+  }
+
+  public int getProtoLength(FieldInfo info) {
+    final boolean hasPositions = info.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
+    final boolean hasOffsets = info.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
+    final boolean hasPayloads = info.hasPayloads();
+    if (hasPositions) {
+      if (hasPayloads || hasOffsets) {
+        return 3;
+      }
+      return 2;
+    }
+    return 1;
   }
 
   @Override

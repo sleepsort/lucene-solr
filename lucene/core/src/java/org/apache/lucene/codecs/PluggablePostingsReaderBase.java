@@ -16,13 +16,13 @@ public abstract class PluggablePostingsReaderBase implements Closeable {
 
   public abstract void init(IndexInput termsIn) throws IOException;
 
-  public abstract TermProtoData newProtoData() throws IOException;
+  public abstract TermMetaData newMetaData() throws IOException;
 
-  public abstract void nextTerm(FieldInfo fieldInfo, TermMetaData meta) throws IOException;
+  public abstract void nextTerm(FieldInfo fieldInfo, TermProtoData meta) throws IOException;
 
-  public abstract DocsEnum docs(FieldInfo fieldInfo, TermMetaData state, Bits skipDocs, DocsEnum reuse, int flags) throws IOException;
+  public abstract DocsEnum docs(FieldInfo fieldInfo, TermProtoData state, Bits skipDocs, DocsEnum reuse, int flags) throws IOException;
 
-  public abstract DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TermMetaData meta, Bits skipDocs, DocsAndPositionsEnum reuse,
+  public abstract DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TermProtoData meta, Bits skipDocs, DocsAndPositionsEnum reuse,
                                                         int flags) throws IOException;
 
   @Override

@@ -1,55 +1,63 @@
 package org.apache.lucene.codecs;
 
-import org.apache.lucene.index.TermState; 
+import java.io.IOException;
 
-public class TermMetaData implements Comparable<TermMetaData> {
 
-  public int docFreq;
-  public long totalTermFreq;
-  public int termBlockOrd;
-  
-  TermProtoData proto;
-  TermState state;
+import org.apache.lucene.index.TermState;
+import org.apache.lucene.store.DataInput;
+import org.apache.lucene.store.DataOutput;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.LongsRef;
+
+public class TermMetaData {
+  // It consists of two parts:
+  //
+  // The base part: 
+  //   long array, in which every value increases 
+  //   monotonically at the same time.
+  //
+  // The extend part:
+  //   byte array, in which non-monotonical values
+  //   are stored/encoded.
+  //
+  // NOTE: For raw output, 
+  // it is always assumed that, when we have
+  //   this.base[i] < another.base[i],
+  // for all j in [base.offset, base.end)
+  //   this.base[j] <= another.base[j]
+  // with this property, we might have better compression 
+  // for base part.
+  //
+  // However, this property is not guraranteed for all intermediate
+  // outputs in a FST, e.g. a TermProtoData shared by two arcs might
+  // get a 'skewed' output, which is not possible to be compared with others
+  // Therefore during building phase, we have to iterate each long value 
+  // to see whether the 'comparable' property still holds.
+  //
+  // NOTE: only use signed part of long value, which is 63 bits
+  //
+  public final LongsRef base;
+  public final BytesRef extend;
 
   public TermMetaData() {
-    proto = null;
-    state = null;
-  }
-  public TermMetaData(TermProtoData proto, TermState state) {
-    this.proto = proto;
-    this.state = state;
-  }
-  public void setProto(TermProtoData proto) {
-    this.proto = proto;
-  }
-  public void setState(TermState state) {
-    this.proto = proto;
-  }
-  public TermProtoData getProto() {
-    return proto;
-  }
-  public TermState getState() {
-    return state;
+    this.base = null;
+    this.extend = null;
   }
 
-  @Override
-  public boolean equals(Object other) {
-    if (other == this) {
-      return true;
-    } else if (other instanceof TermMetaData) {
-      return this.proto.base.equals(((TermMetaData)other).proto.base);
-    } else {
-      return false;
-    }
+  public TermMetaData(LongsRef l, BytesRef b) {
+    this.base = l;
+    this.extend = b;
   }
 
-  @Override
-  public int compareTo(TermMetaData other) {
-    return this.proto.base.compareTo(other.proto.base);
-  }
-
-  @Override
   public String toString() {
-    return "TermMetaData";
+    return base.toString() + " " + extend.toString();
   }
+  
+  public void write(DataOutput out, TermValues values) throws IOException {
+    throw new IllegalStateException("not implemented");
+  }
+  public void read(DataInput in, TermValues values) throws IOException {
+    throw new IllegalStateException("not implemented");
+  }
+
 }

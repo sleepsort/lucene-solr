@@ -6,6 +6,7 @@ import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.util.fst.Outputs;
 import org.apache.lucene.util.LongsRef;
+import org.apache.lucene.index.TermState;
 
 public class TermProtoOutputs extends Outputs<TermProtoData> {
   private final static TermProtoData NO_OUTPUT = new TermProtoData();
@@ -45,10 +46,12 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
   // instead of being reused. quite hairly to detect it here, so the caller 
   // must be careful about this.
   //
-  public TermProtoData common(TermProtoData t1, TermProtoData t2) {
-    if (t1 == NO_OUTPUT || t2 == NO_OUTPUT) {
+  public TermProtoData common(TermProtoData p1, TermProtoData p2) {
+    if (p1 == NO_OUTPUT || p2 == NO_OUTPUT) {
       return NO_OUTPUT;
     }
+    TermMetaData t1 = p1.getMetaData();
+    TermMetaData t2 = p2.getMetaData();
     assert t1.base != null;
     assert t2.base != null;
     assert t1.base.length == t2.base.length;
@@ -85,28 +88,31 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
     } else {
       // equal, so we might check the extend part
       if (t1.extend != null && t1.extend.equals(t2.extend)) {
-        return t1;
+        return p1;
       } else {
-        return new TermProtoData(base1, null);
+        return new TermProtoData(null, null, new TermMetaData(base1, null));
       }
     }
     if (pos1 < end1) {
       // not legally comparable
       return NO_OUTPUT;
     } else if (order) {
-      return new TermProtoData(base1, null);
+      return new TermProtoData(null, null, new TermMetaData(base1, null));
     } else {
-      return new TermProtoData(base2, null);
+      return new TermProtoData(null, null, new TermMetaData(base2, null));
     }
   }
 
   @Override
   // nocommit: maybe we should update the javadoc about this?
   // this *actually* always assume that t2 <= t1 before calling the method
-  public TermProtoData subtract(TermProtoData t1, TermProtoData t2) {
-    if (t2 == NO_OUTPUT) {
-      return t1;
+  public TermProtoData subtract(TermProtoData p1, TermProtoData p2) {
+    if (p2 == NO_OUTPUT) {
+      return p1;
     }
+    TermMetaData t1 = p1.getMetaData();
+    TermMetaData t2 = p2.getMetaData();
+
     assert t1.base != null;
     assert t2.base != null;
 
@@ -127,18 +133,23 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
       pos1++;
       pos2++;
     }
-    return new TermProtoData(new LongsRef(share, 0, pos), null);
+    TermValues values = p1.values;
+    TermState state = p1.state;
+    TermMetaData meta = new TermMetaData(new LongsRef(share, 0, pos), null);
+    return new TermProtoData(values, state, meta);
   }
 
   @Override
   // nocommit: need to check all-zero case?
   // so we can reuse one LongsRef
-  public TermProtoData add(TermProtoData t1, TermProtoData t2) {
-    if (t1 == NO_OUTPUT) {
-      return t2;
-    } else if (t2 == NO_OUTPUT) {
-      return t1;
+  public TermProtoData add(TermProtoData p1, TermProtoData p2) {
+    if (p1 == NO_OUTPUT) {
+      return p2;
+    } else if (p2 == NO_OUTPUT) {
+      return p1;
     }
+    TermMetaData t1 = p1.getMetaData();
+    TermMetaData t2 = p2.getMetaData();
     assert t1.base != null;
     assert t2.base != null;
 
@@ -157,16 +168,24 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
       pos1++;
       pos2++;
     }
-    return NO_OUTPUT;
+    assert p1.values == null || p2.values == null;
+    assert p1.state == null || p2.state == null;
+
+    TermValues values = (p1.values == null ? p1.values : p2.values);
+    TermState state = (p1.state == null ? p1.state: p2.state);
+    TermMetaData meta = new TermMetaData(new LongsRef(accum, 0, pos), null);
+    return new TermProtoData(values, state, meta);
   }
 
   @Override
-  public void write(TermProtoData data, DataOutput out) throws IOException {
+  public void write(TermProtoData proto, DataOutput out) throws IOException {
     throw new IllegalStateException("not implemented");
   }
 
   @Override
   public TermProtoData read(DataInput in) throws IOException {
+    // nocommit: will be better if we can aquire TermState somewhere
+    // to help decoding ...
     throw new IllegalStateException("not implemented");
   }
 
