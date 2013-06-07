@@ -179,13 +179,35 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
 
   @Override
   public void write(TermProtoData proto, DataOutput out) throws IOException {
-    throw new IllegalStateException("not implemented");
+    writeValues(proto.values, out);
+    writeState(proto.state, proto.values, out);
+    writeMetaData(proto.meta, proto.values, out);
   }
-
   @Override
   public TermProtoData read(DataInput in) throws IOException {
-    // nocommit: will be better if we can aquire TermState somewhere
-    // to help decoding ...
+    TermValues values = readValues(in);
+    TermState state = readState(values, in);
+    TermMetaData meta = readMetaData(values, in);
+    return new TermProtoData(values, state, meta);
+  }
+
+  // nocommit: will be better if we can aquire TermValues to help decoding ...
+  public void writeValues(TermValues values, DataOutput out) throws IOException {
+    throw new IllegalStateException("not implemented");
+  }
+  public void writeState(TermState state, TermValues values, DataOutput out) throws IOException {
+    throw new IllegalStateException("not implemented");
+  }
+  public void writeMetaData(TermMetaData meta, TermValues values, DataOutput out) throws IOException {
+    throw new IllegalStateException("not implemented");
+  }
+  public TermValues readValues(DataInput in) throws IOException {
+    throw new IllegalStateException("not implemented");
+  }
+  public TermState readState(TermValues values, DataInput in) throws IOException {
+    throw new IllegalStateException("not implemented");
+  }
+  public TermMetaData readMetaData(TermValues values, DataInput in) throws IOException {
     throw new IllegalStateException("not implemented");
   }
 
