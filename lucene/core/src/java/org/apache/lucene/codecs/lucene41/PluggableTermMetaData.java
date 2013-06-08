@@ -7,7 +7,7 @@ import org.apache.lucene.util.LongsRef;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.codecs.TermMetaData;
-import org.apache.lucene.codecs.TermValues;
+import org.apache.lucene.index.TermState;
 
 final class PluggableTermMetaData extends TermMetaData {
   public static int IDX_DOC_FP = 0;
@@ -25,7 +25,7 @@ final class PluggableTermMetaData extends TermMetaData {
   }
 
   @Override
-  public void write(DataOutput out, TermValues values) throws IOException {
+  public void write(DataOutput out, TermState state) throws IOException {
     long skipOffset;
     long lastPosBlockOffset;
     int singletonDocID;
@@ -37,7 +37,7 @@ final class PluggableTermMetaData extends TermMetaData {
   }
 
   @Override
-  public void read(DataInput in, TermValues values) throws IOException {
+  public void read(DataInput in, TermState state) throws IOException {
   }
 
   @Override

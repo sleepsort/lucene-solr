@@ -90,16 +90,16 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
       if (t1.extend != null && t1.extend.equals(t2.extend)) {
         return p1;
       } else {
-        return new TermProtoData(null, null, new TermMetaData(base1, null));
+        return new TermProtoData(null, new TermMetaData(base1, null));
       }
     }
     if (pos1 < end1) {
       // not legally comparable
       return NO_OUTPUT;
     } else if (order) {
-      return new TermProtoData(null, null, new TermMetaData(base1, null));
+      return new TermProtoData(null, new TermMetaData(base1, null));
     } else {
-      return new TermProtoData(null, null, new TermMetaData(base2, null));
+      return new TermProtoData(null, new TermMetaData(base2, null));
     }
   }
 
@@ -133,10 +133,9 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
       pos1++;
       pos2++;
     }
-    TermValues values = p1.values;
     TermState state = p1.state;
     TermMetaData meta = new TermMetaData(new LongsRef(share, 0, pos), null);
-    return new TermProtoData(values, state, meta);
+    return new TermProtoData(state, meta);
   }
 
   @Override
@@ -168,46 +167,38 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
       pos1++;
       pos2++;
     }
-    assert p1.values == null || p2.values == null;
     assert p1.state == null || p2.state == null;
 
-    TermValues values = (p1.values == null ? p1.values : p2.values);
     TermState state = (p1.state == null ? p1.state: p2.state);
     TermMetaData meta = new TermMetaData(new LongsRef(accum, 0, pos), null);
-    return new TermProtoData(values, state, meta);
+    return new TermProtoData(state, meta);
   }
 
   @Override
   public void write(TermProtoData proto, DataOutput out) throws IOException {
-    writeValues(proto.values, out);
-    writeState(proto.state, proto.values, out);
-    writeMetaData(proto.meta, proto.values, out);
+    writeState(proto.state, out);
+    writeMetaData(proto.meta, proto.state, out);
   }
   @Override
   public TermProtoData read(DataInput in) throws IOException {
-    TermValues values = readValues(in);
-    TermState state = readState(values, in);
-    TermMetaData meta = readMetaData(values, in);
-    return new TermProtoData(values, state, meta);
+    // nocommit: read byte len, and steal one bit to determine whether 
+    // this output contains term state?
+    TermState state = readState(in);
+    TermMetaData meta = readMetaData(state, in);
+    return new TermProtoData(state, meta);
   }
 
-  // nocommit: will be better if we can aquire TermValues to help decoding ...
-  public void writeValues(TermValues values, DataOutput out) throws IOException {
+  public void writeState(TermState state, DataOutput out) throws IOException {
     throw new IllegalStateException("not implemented");
   }
-  public void writeState(TermState state, TermValues values, DataOutput out) throws IOException {
+  // NOTE: will be better if we can aquire TermState to help decoding ...
+  public void writeMetaData(TermMetaData meta, TermState state, DataOutput out) throws IOException {
     throw new IllegalStateException("not implemented");
   }
-  public void writeMetaData(TermMetaData meta, TermValues values, DataOutput out) throws IOException {
+  public TermState readState(DataInput in) throws IOException {
     throw new IllegalStateException("not implemented");
   }
-  public TermValues readValues(DataInput in) throws IOException {
-    throw new IllegalStateException("not implemented");
-  }
-  public TermState readState(TermValues values, DataInput in) throws IOException {
-    throw new IllegalStateException("not implemented");
-  }
-  public TermMetaData readMetaData(TermValues values, DataInput in) throws IOException {
+  public TermMetaData readMetaData(TermState state, DataInput in) throws IOException {
     throw new IllegalStateException("not implemented");
   }
 

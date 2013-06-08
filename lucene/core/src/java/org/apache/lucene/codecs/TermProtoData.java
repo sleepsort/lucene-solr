@@ -3,27 +3,19 @@ package org.apache.lucene.codecs;
 import org.apache.lucene.index.TermState; 
 
 public class TermProtoData {
-  // shared
-  TermValues values;
- 
   // customize by term dict
-  TermState state;
+  public TermState state;
 
   // customize by postings base format
-  TermMetaData meta;
+  public TermMetaData meta;
 
   public TermProtoData() {
-    values = null;
     state = null;
     meta = null;
   }
-  public TermProtoData(TermValues values, TermState state, TermMetaData meta) {
-    this.values = values;
+  public TermProtoData(TermState state, TermMetaData meta) {
     this.state = state;
     this.meta= meta;
-  }
-  public void setValues(TermValues values) {
-    this.values = values;
   }
   public void setMetaData(TermMetaData meta) {
     this.meta = meta;
@@ -36,9 +28,6 @@ public class TermProtoData {
   }
   public TermState getState() {
     return state;
-  }
-  public TermValues getValues() {
-    return values;
   }
 
   @Override

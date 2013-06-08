@@ -53,10 +53,10 @@ public class TermMetaData {
     return base.toString() + " " + extend.toString();
   }
   
-  public void write(DataOutput out, TermValues values) throws IOException {
+  public void write(DataOutput out, TermState state) throws IOException {
     throw new IllegalStateException("not implemented");
   }
-  public void read(DataInput in, TermValues values) throws IOException {
+  public void read(DataInput in, TermState state) throws IOException {
     throw new IllegalStateException("not implemented");
   }
 
