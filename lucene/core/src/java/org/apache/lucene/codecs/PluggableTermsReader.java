@@ -366,8 +366,7 @@ public class PluggableTermsReader extends FieldsProducer {
     }
 
     void endBlock(FieldReader.SegmentTermsEnum.Frame frame) {
-      final BlockTermState state = (BlockTermState)frame.proto.state;
-      final int termCount = frame.isLeafBlock ? frame.entCount : state.termBlockOrd;
+      final int termCount = frame.isLeafBlock ? frame.entCount : frame.state.termBlockOrd;
       final int subBlockCount = frame.entCount - termCount;
       totalTermCount += termCount;
       if (termCount != 0 && subBlockCount != 0) {
@@ -582,7 +581,7 @@ public class PluggableTermsReader extends FieldsProducer {
         long lastSubFP;
 
         // State in automaton
-        int state;
+        int fsaState;
 
         int metaDataUpto;
 
@@ -621,6 +620,7 @@ public class PluggableTermsReader extends FieldsProducer {
         FST.Arc<BytesRef> arc;
 
         final TermProtoData proto;
+        final BlockTermState state; // nocommit: nested in proto
 
         // Cumulative output so far
         BytesRef outputPrefix;
@@ -630,8 +630,8 @@ public class PluggableTermsReader extends FieldsProducer {
 
         public Frame(int ord) throws IOException {
           this.ord = ord;
-          BlockTermState state = new BlockTermState();
-          state.totalTermFreq = -1;
+          this.state = new BlockTermState();
+          this.state.totalTermFreq = -1;
           this.proto = new TermProtoData(state, postingsReader.newMetaData());
         }
 
@@ -654,10 +654,10 @@ public class PluggableTermsReader extends FieldsProducer {
           load(null);
         }
 
-        public void setState(int state) {
-          this.state = state;
+        public void setState(int fsaState) {
+          this.fsaState = fsaState;
           transitionIndex = 0;
-          transitions = compiledAutomaton.sortedTransitions[state];
+          transitions = compiledAutomaton.sortedTransitions[fsaState];
           if (transitions.length != 0) {
             curTransitionMax = transitions[0].getMax();
           } else {
@@ -686,7 +686,7 @@ public class PluggableTermsReader extends FieldsProducer {
 
               // If current state is accept, we must process
               // first block in case it has empty suffix:
-              if (!runAutomaton.isAccept(state)) {
+              if (!runAutomaton.isAccept(fsaState)) {
                 // Maybe skip floor blocks:
                 while (numFollowFloorBlocks != 0 && nextFloorLabel <= transitions[0].getMin()) {
                   fp = fpOrig + (floorDataReader.readVLong() >>> 1);
@@ -728,7 +728,7 @@ public class PluggableTermsReader extends FieldsProducer {
           statsReader.reset(statBytes, 0, numBytes);
           metaDataUpto = 0;
 
-          ((BlockTermState)proto.state).termBlockOrd = 0;
+          state.termBlockOrd = 0;
           nextEnt = 0;
           
           postingsReader.readTermsBlock(in, fieldInfo);
@@ -767,7 +767,7 @@ public class PluggableTermsReader extends FieldsProducer {
           suffixesReader.skipBytes(suffix);
           if ((code & 1) == 0) {
             // A normal term
-            ((BlockTermState)proto.state).termBlockOrd++;
+            state.termBlockOrd++;
             return false;
           } else {
             // A sub-block; make sub-FP absolute:
@@ -777,7 +777,7 @@ public class PluggableTermsReader extends FieldsProducer {
         }
 
         public int getTermBlockOrd() {
-          return isLeafBlock ? nextEnt : ((BlockTermState)proto.state).termBlockOrd;
+          return isLeafBlock ? nextEnt : state.termBlockOrd;
         }
 
         public void decodeMetaData() throws IOException {
@@ -788,7 +788,7 @@ public class PluggableTermsReader extends FieldsProducer {
 
           // We must set/incr state.termCount because
           // postings impl can look at this
-          ((BlockTermState)proto.state).termBlockOrd = metaDataUpto;
+          state.termBlockOrd = metaDataUpto;
       
           // TODO: better API would be "jump straight to term=N"???
           while (metaDataUpto < limit) {
@@ -801,16 +801,16 @@ public class PluggableTermsReader extends FieldsProducer {
 
             // TODO: if docFreq were bulk decoded we could
             // just skipN here:
-            ((BlockTermState)proto.state).docFreq = statsReader.readVInt();
+            state.docFreq = statsReader.readVInt();
             //if (DEBUG) System.out.println("    dF=" + state.docFreq);
             if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
-              ((BlockTermState)proto.state).totalTermFreq = ((BlockTermState)proto.state).docFreq + statsReader.readVLong();
+              state.totalTermFreq = state.docFreq + statsReader.readVLong();
               //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
             }
 
             postingsReader.nextTerm(fieldInfo, proto);
             metaDataUpto++;
-            ((BlockTermState)proto.state).termBlockOrd++;
+            state.termBlockOrd++;
           }
         }
       }
@@ -951,13 +951,13 @@ public class PluggableTermsReader extends FieldsProducer {
         //if (DEBUG) System.out.println("BTIR.docFreq");
         currentFrame.decodeMetaData();
         //if (DEBUG) System.out.println("  return " + currentFrame.termState.docFreq);
-        return ((BlockTermState)currentFrame.proto.state).docFreq;
+        return currentFrame.state.docFreq;
       }
 
       @Override
       public long totalTermFreq() throws IOException {
         currentFrame.decodeMetaData();
-        return ((BlockTermState)currentFrame.proto.state).totalTermFreq;
+        return currentFrame.state.totalTermFreq;
       }
 
       @Override
@@ -978,12 +978,12 @@ public class PluggableTermsReader extends FieldsProducer {
       }
 
       private int getState() {
-        int state = currentFrame.state;
+        int fsaState = currentFrame.fsaState;
         for(int idx=0;idx<currentFrame.suffix;idx++) {
-          state = runAutomaton.step(state,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
-          assert state != -1;
+          fsaState = runAutomaton.step(fsaState,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
+          assert fsaState != -1;
         }
-        return state;
+        return fsaState;
       }
 
       // NOTE: specialized to only doing the first-time
@@ -1006,7 +1006,7 @@ public class PluggableTermsReader extends FieldsProducer {
             final int saveStartBytePos = currentFrame.startBytePos;
             final int saveSuffix = currentFrame.suffix;
             final long saveLastSubFP = currentFrame.lastSubFP;
-            final int saveTermBlockOrd = ((BlockTermState)currentFrame.proto.state).termBlockOrd;
+            final int saveTermBlockOrd = currentFrame.state.termBlockOrd;
 
             final boolean isSubBlock = currentFrame.next();
 
@@ -1049,7 +1049,7 @@ public class PluggableTermsReader extends FieldsProducer {
                 currentFrame.startBytePos = saveStartBytePos;
                 currentFrame.suffix = saveSuffix;
                 currentFrame.suffixesReader.setPosition(savePos);
-                ((BlockTermState)currentFrame.proto.state).termBlockOrd = saveTermBlockOrd;
+                currentFrame.state.termBlockOrd = saveTermBlockOrd;
                 System.arraycopy(currentFrame.suffixBytes, currentFrame.startBytePos, term.bytes, currentFrame.prefix, currentFrame.suffix);
                 term.length = currentFrame.prefix + currentFrame.suffix;
                 // If the last entry was a block we don't
@@ -1181,10 +1181,10 @@ public class PluggableTermsReader extends FieldsProducer {
           // until the limit
 
           // See if the term prefix matches the automaton:
-          int state = currentFrame.state;
+          int fsaState = currentFrame.fsaState;
           for (int idx=0;idx<currentFrame.suffix;idx++) {
-            state = runAutomaton.step(state,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
-            if (state == -1) {
+            fsaState = runAutomaton.step(fsaState,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
+            if (fsaState == -1) {
               // No match
               //System.out.println("    no s=" + state);
               continue nextTerm;
@@ -1197,9 +1197,9 @@ public class PluggableTermsReader extends FieldsProducer {
             // Match!  Recurse:
             //if (DEBUG) System.out.println("      sub-block match to state=" + state + "; recurse fp=" + currentFrame.lastSubFP);
             copyTerm();
-            currentFrame = pushFrame(state);
+            currentFrame = pushFrame(fsaState);
             //if (DEBUG) System.out.println("\n  frame ord=" + currentFrame.ord + " prefix=" + brToString(new BytesRef(term.bytes, term.offset, currentFrame.prefix)) + " state=" + currentFrame.state + " lastInFloor?=" + currentFrame.isLastInFloor + " fp=" + currentFrame.fp + " trans=" + (currentFrame.transitions.length == 0 ? "n/a" : currentFrame.transitions[currentFrame.transitionIndex]) + " outputPrefix=" + currentFrame.outputPrefix);
-          } else if (runAutomaton.isAccept(state)) {
+          } else if (runAutomaton.isAccept(fsaState)) {
             copyTerm();
             //if (DEBUG) System.out.println("      term match to state=" + state + "; return term=" + brToString(term));
             assert savedStartTerm == null || term.compareTo(savedStartTerm) > 0: "saveStartTerm=" + savedStartTerm.utf8ToString() + " term=" + term.utf8ToString();
@@ -2169,14 +2169,14 @@ public class PluggableTermsReader extends FieldsProducer {
         //if (DEBUG) System.out.println("BTR.docFreq");
         currentFrame.decodeMetaData();
         //if (DEBUG) System.out.println("  return " + currentFrame.state.docFreq);
-        return ((BlockTermState)currentFrame.proto.state).docFreq;
+        return currentFrame.state.docFreq;
       }
 
       @Override
       public long totalTermFreq() throws IOException {
         assert !eof;
         currentFrame.decodeMetaData();
-        return ((BlockTermState)currentFrame.proto.state).totalTermFreq;
+        return currentFrame.state.totalTermFreq;
       }
 
       @Override
@@ -2300,11 +2300,12 @@ public class PluggableTermsReader extends FieldsProducer {
         int metaDataUpto;
 
         final TermProtoData proto;
+        final BlockTermState state;
 
         public Frame(int ord) throws IOException {
           this.ord = ord;
-          BlockTermState state = new BlockTermState();
-          state.totalTermFreq = -1;
+          this.state = new BlockTermState();
+          this.state.totalTermFreq = -1;
           this.proto = new TermProtoData(state, postingsReader.newMetaData());
         }
 
@@ -2323,7 +2324,7 @@ public class PluggableTermsReader extends FieldsProducer {
         }
 
         public int getTermBlockOrd() {
-          return isLeafBlock ? nextEnt : ((BlockTermState)proto.state).termBlockOrd;
+          return isLeafBlock ? nextEnt : state.termBlockOrd;
         }
 
         void loadNextFloorBlock() throws IOException {
@@ -2397,7 +2398,7 @@ public class PluggableTermsReader extends FieldsProducer {
           statsReader.reset(statBytes, 0, numBytes);
           metaDataUpto = 0;
 
-          ((BlockTermState)proto.state).termBlockOrd = 0;
+          state.termBlockOrd = 0;
           nextEnt = 0;
           lastSubFP = -1;
 
@@ -2497,7 +2498,7 @@ public class PluggableTermsReader extends FieldsProducer {
             // A normal term
             termExists = true;
             subCode = 0;
-            ((BlockTermState)proto.state).termBlockOrd++;
+            state.termBlockOrd++;
             return false;
           } else {
             // A sub-block; make sub-FP absolute:
@@ -2591,7 +2592,7 @@ public class PluggableTermsReader extends FieldsProducer {
 
           // We must set/incr state.termCount because
           // postings impl can look at this
-          ((BlockTermState)proto.state).termBlockOrd = metaDataUpto;
+          state.termBlockOrd = metaDataUpto;
       
           // TODO: better API would be "jump straight to term=N"???
           while (metaDataUpto < limit) {
@@ -2604,16 +2605,16 @@ public class PluggableTermsReader extends FieldsProducer {
 
             // TODO: if docFreq were bulk decoded we could
             // just skipN here:
-            ((BlockTermState)proto.state).docFreq = statsReader.readVInt();
+            state.docFreq = statsReader.readVInt();
             //if (DEBUG) System.out.println("    dF=" + state.docFreq);
             if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
-              ((BlockTermState)proto.state).totalTermFreq = ((BlockTermState)proto.state).docFreq + statsReader.readVLong();
+              state.totalTermFreq = state.docFreq + statsReader.readVLong();
               //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
             }
 
             postingsReader.nextTerm(fieldInfo, proto);
             metaDataUpto++;
-            ((BlockTermState)proto.state).termBlockOrd++;
+            state.termBlockOrd++;
           }
         }
 
@@ -2657,7 +2658,7 @@ public class PluggableTermsReader extends FieldsProducer {
                 return;
               }
             } else {
-              ((BlockTermState)proto.state).termBlockOrd++;
+              state.termBlockOrd++;
             }
           }
         }
@@ -2835,7 +2836,7 @@ public class PluggableTermsReader extends FieldsProducer {
             startBytePos = suffixesReader.getPosition();
             suffixesReader.skipBytes(suffix);
             if (termExists) {
-              ((BlockTermState)proto.state).termBlockOrd++;
+              state.termBlockOrd++;
               subCode = 0;
             } else {
               subCode = suffixesReader.readVLong();
