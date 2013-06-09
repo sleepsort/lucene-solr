@@ -8,15 +8,10 @@ import java.io.IOException;
 import java.util.Arrays;
 
 import org.apache.lucene.codecs.BlockTermState;
-import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.TermMetaData;
 import org.apache.lucene.codecs.TermProtoData;
-import org.apache.lucene.index.FieldInfo;
-import org.apache.lucene.index.FieldInfo.IndexOptions;
-import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.TermState;
 import org.apache.lucene.store.ByteArrayDataInput;
-import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
 
 final class Lucene41MetaData extends TermMetaData {
