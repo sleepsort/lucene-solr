@@ -23,6 +23,8 @@ import java.util.Arrays;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.PostingsReaderBase;
+import org.apache.lucene.codecs.TermMetaData;
+import org.apache.lucene.codecs.TermProtoData;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
@@ -115,47 +117,9 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
     skipMinimum = termsIn.readInt();
   }
 
-  // Must keep final because we do non-standard clone
-  private final static class StandardTermState extends BlockTermState {
-    long freqOffset;
-    long proxOffset;
-    long skipOffset;
-
-    // Only used by the "primary" TermState -- clones don't
-    // copy this (basically they are "transient"):
-    ByteArrayDataInput bytesReader;  // TODO: should this NOT be in the TermState...?
-    byte[] bytes;
-
-    @Override
-    public StandardTermState clone() {
-      StandardTermState other = new StandardTermState();
-      other.copyFrom(this);
-      return other;
-    }
-
-    @Override
-    public void copyFrom(TermState _other) {
-      super.copyFrom(_other);
-      StandardTermState other = (StandardTermState) _other;
-      freqOffset = other.freqOffset;
-      proxOffset = other.proxOffset;
-      skipOffset = other.skipOffset;
-
-      // Do not copy bytes, bytesReader (else TermState is
-      // very heavy, ie drags around the entire block's
-      // byte[]).  On seek back, if next() is in fact used
-      // (rare!), they will be re-read from disk.
-    }
-
-    @Override
-    public String toString() {
-      return super.toString() + " freqFP=" + freqOffset + " proxFP=" + proxOffset + " skipOffset=" + skipOffset;
-    }
-  }
-
   @Override
-  public BlockTermState newTermState() {
-    return new StandardTermState();
+  public TermMetaData newMetaData() {
+    return new Lucene40MetaData();
   }
 
   @Override
@@ -174,68 +138,69 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
   /* Reads but does not decode the byte[] blob holding
      metadata for the current terms block */
   @Override
-  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, BlockTermState _termState) throws IOException {
-    final StandardTermState termState = (StandardTermState) _termState;
+  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, TermProtoData proto) throws IOException {
+    final Lucene40MetaData meta= (Lucene40MetaData)proto.meta;
 
     final int len = termsIn.readVInt();
 
-    // if (DEBUG) System.out.println("  SPR.readTermsBlock bytes=" + len + " ts=" + _termState);
-    if (termState.bytes == null) {
-      termState.bytes = new byte[ArrayUtil.oversize(len, 1)];
-      termState.bytesReader = new ByteArrayDataInput();
-    } else if (termState.bytes.length < len) {
-      termState.bytes = new byte[ArrayUtil.oversize(len, 1)];
+    // if (DEBUG) System.out.println("  SPR.readTermsBlock bytes=" + len + " ts=" + _meta);
+    if (meta.bytes == null) {
+      meta.bytes = new byte[ArrayUtil.oversize(len, 1)];
+      meta.bytesReader = new ByteArrayDataInput();
+    } else if (meta.bytes.length < len) {
+      meta.bytes = new byte[ArrayUtil.oversize(len, 1)];
     }
 
-    termsIn.readBytes(termState.bytes, 0, len);
-    termState.bytesReader.reset(termState.bytes, 0, len);
+    termsIn.readBytes(meta.bytes, 0, len);
+    meta.bytesReader.reset(meta.bytes, 0, len);
   }
 
   @Override
-  public void nextTerm(FieldInfo fieldInfo, BlockTermState _termState)
+  public void nextTerm(FieldInfo fieldInfo, TermProtoData proto)
     throws IOException {
-    final StandardTermState termState = (StandardTermState) _termState;
-    // if (DEBUG) System.out.println("SPR: nextTerm seg=" + segment + " tbOrd=" + termState.termBlockOrd + " bytesReader.fp=" + termState.bytesReader.getPosition());
-    final boolean isFirstTerm = termState.termBlockOrd == 0;
+    final BlockTermState state = proto.state;
+    final Lucene40MetaData meta= (Lucene40MetaData)proto.meta;
+    // if (DEBUG) System.out.println("SPR: nextTerm seg=" + segment + " tbOrd=" + state.termBlockOrd + " bytesReader.fp=" + meta.bytesReader.getPosition());
+    final boolean isFirstTerm = state.termBlockOrd == 0;
 
     if (isFirstTerm) {
-      termState.freqOffset = termState.bytesReader.readVLong();
+      meta.setFreqOffset(meta.bytesReader.readVLong());
     } else {
-      termState.freqOffset += termState.bytesReader.readVLong();
+      meta.setFreqOffset(meta.freqOffset() + meta.bytesReader.readVLong());
     }
     /*
     if (DEBUG) {
-      System.out.println("  dF=" + termState.docFreq);
-      System.out.println("  freqFP=" + termState.freqOffset);
+      System.out.println("  dF=" + state.docFreq);
+      System.out.println("  freqFP=" + meta.freqOffset);
     }
     */
-    assert termState.freqOffset < freqIn.length();
+    assert meta.freqOffset() < freqIn.length();
 
-    if (termState.docFreq >= skipMinimum) {
-      termState.skipOffset = termState.bytesReader.readVLong();
-      // if (DEBUG) System.out.println("  skipOffset=" + termState.skipOffset + " vs freqIn.length=" + freqIn.length());
-      assert termState.freqOffset + termState.skipOffset < freqIn.length();
+    if (state.docFreq >= skipMinimum) {
+      meta.setSkipOffset(meta.bytesReader.readVLong());
+      // if (DEBUG) System.out.println("  skipOffset=" + meta.skipOffset() + " vs freqIn.length=" + freqIn.length());
+      assert meta.freqOffset() + meta.skipOffset() < freqIn.length();
     } else {
       // undefined
     }
 
     if (fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0) {
       if (isFirstTerm) {
-        termState.proxOffset = termState.bytesReader.readVLong();
+        meta.setProxOffset(meta.bytesReader.readVLong());
       } else {
-        termState.proxOffset += termState.bytesReader.readVLong();
+        meta.setProxOffset(meta.proxOffset() + meta.bytesReader.readVLong());
       }
-      // if (DEBUG) System.out.println("  proxFP=" + termState.proxOffset);
+      // if (DEBUG) System.out.println("  proxFP=" + meta.proxOffset());
     }
   }
     
   @Override
-  public DocsEnum docs(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
+  public DocsEnum docs(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
     if (canReuse(reuse, liveDocs)) {
-      // if (DEBUG) System.out.println("SPR.docs ts=" + termState);
-      return ((SegmentDocsEnumBase) reuse).reset(fieldInfo, (StandardTermState)termState);
+      // if (DEBUG) System.out.println("SPR.docs ts=" + proto);
+      return ((SegmentDocsEnumBase) reuse).reset(fieldInfo, proto);
     }
-    return newDocsEnum(liveDocs, fieldInfo, (StandardTermState)termState);
+    return newDocsEnum(liveDocs, fieldInfo, proto);
   }
   
   private boolean canReuse(DocsEnum reuse, Bits liveDocs) {
@@ -252,16 +217,16 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
     return false;
   }
   
-  private DocsEnum newDocsEnum(Bits liveDocs, FieldInfo fieldInfo, StandardTermState termState) throws IOException {
+  private DocsEnum newDocsEnum(Bits liveDocs, FieldInfo fieldInfo, TermProtoData proto) throws IOException {
     if (liveDocs == null) {
-      return new AllDocsSegmentDocsEnum(freqIn).reset(fieldInfo, termState);
+      return new AllDocsSegmentDocsEnum(freqIn).reset(fieldInfo, proto);
     } else {
-      return new LiveDocsSegmentDocsEnum(freqIn, liveDocs).reset(fieldInfo, termState);
+      return new LiveDocsSegmentDocsEnum(freqIn, liveDocs).reset(fieldInfo, proto);
     }
   }
 
   @Override
-  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs,
+  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs,
                                                DocsAndPositionsEnum reuse, int flags)
     throws IOException {
 
@@ -284,7 +249,7 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
           docsEnum = new SegmentFullPositionsEnum(freqIn, proxIn);
         }
       }
-      return docsEnum.reset(fieldInfo, (StandardTermState) termState, liveDocs);
+      return docsEnum.reset(fieldInfo, proto, liveDocs);
     } else {
       SegmentDocsAndPositionsEnum docsEnum;
       if (reuse == null || !(reuse instanceof SegmentDocsAndPositionsEnum)) {
@@ -298,7 +263,7 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
           docsEnum = new SegmentDocsAndPositionsEnum(freqIn, proxIn);
         }
       }
-      return docsEnum.reset(fieldInfo, (StandardTermState) termState, liveDocs);
+      return docsEnum.reset(fieldInfo, proto, liveDocs);
     }
   }
 
@@ -342,18 +307,19 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
     }
     
     
-    DocsEnum reset(FieldInfo fieldInfo, StandardTermState termState) throws IOException {
+    DocsEnum reset(FieldInfo fieldInfo, TermProtoData proto) throws IOException {
+      Lucene40MetaData meta = (Lucene40MetaData)proto.meta;
       indexOmitsTF = fieldInfo.getIndexOptions() == IndexOptions.DOCS_ONLY;
       storePayloads = fieldInfo.hasPayloads();
       storeOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
-      freqOffset = termState.freqOffset;
-      skipOffset = termState.skipOffset;
+      freqOffset = meta.freqOffset();
+      skipOffset = meta.skipOffset();
 
       // TODO: for full enum case (eg segment merging) this
       // seek is unnecessary; maybe we can avoid in such
       // cases
-      freqIn.seek(termState.freqOffset);
-      limit = termState.docFreq;
+      freqIn.seek(freqOffset);
+      limit = proto.state.docFreq;
       assert limit > 0;
       ord = 0;
       doc = -1;
@@ -725,7 +691,9 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
       this.proxIn = proxIn.clone();
     }
 
-    public SegmentDocsAndPositionsEnum reset(FieldInfo fieldInfo, StandardTermState termState, Bits liveDocs) throws IOException {
+    public SegmentDocsAndPositionsEnum reset(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs) throws IOException {
+      final BlockTermState state = proto.state;
+      final Lucene40MetaData meta = (Lucene40MetaData) proto.meta;
       assert fieldInfo.getIndexOptions() == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS;
       assert !fieldInfo.hasPayloads();
 
@@ -734,10 +702,10 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
       // TODO: for full enum case (eg segment merging) this
       // seek is unnecessary; maybe we can avoid in such
       // cases
-      freqIn.seek(termState.freqOffset);
-      lazyProxPointer = termState.proxOffset;
+      freqIn.seek(meta.freqOffset());
+      lazyProxPointer = meta.proxOffset();
 
-      limit = termState.docFreq;
+      limit = state.docFreq;
       assert limit > 0;
 
       ord = 0;
@@ -748,9 +716,9 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
       skipped = false;
       posPendingCount = 0;
 
-      freqOffset = termState.freqOffset;
-      proxOffset = termState.proxOffset;
-      skipOffset = termState.skipOffset;
+      freqOffset = meta.freqOffset();
+      proxOffset = meta.proxOffset();
+      skipOffset = meta.skipOffset();
       // if (DEBUG) System.out.println("StandardR.D&PE reset seg=" + segment + " limit=" + limit + " freqFP=" + freqOffset + " proxFP=" + proxOffset);
 
       return this;
@@ -938,7 +906,9 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
       this.proxIn = proxIn.clone();
     }
 
-    public SegmentFullPositionsEnum reset(FieldInfo fieldInfo, StandardTermState termState, Bits liveDocs) throws IOException {
+    public SegmentFullPositionsEnum reset(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs) throws IOException {
+      final BlockTermState state = proto.state;
+      final Lucene40MetaData meta = (Lucene40MetaData) proto.meta;
       storeOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
       storePayloads = fieldInfo.hasPayloads();
       assert fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
@@ -953,10 +923,10 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
       // TODO: for full enum case (eg segment merging) this
       // seek is unnecessary; maybe we can avoid in such
       // cases
-      freqIn.seek(termState.freqOffset);
-      lazyProxPointer = termState.proxOffset;
+      freqIn.seek(meta.freqOffset());
+      lazyProxPointer = meta.proxOffset();
 
-      limit = termState.docFreq;
+      limit = state.docFreq;
       ord = 0;
       doc = -1;
       accum = 0;
@@ -967,9 +937,9 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
       posPendingCount = 0;
       payloadPending = false;
 
-      freqOffset = termState.freqOffset;
-      proxOffset = termState.proxOffset;
-      skipOffset = termState.skipOffset;
+      freqOffset = meta.freqOffset();
+      proxOffset = meta.proxOffset();
+      skipOffset = meta.skipOffset();
       //System.out.println("StandardR.D&PE reset seg=" + segment + " limit=" + limit + " freqFP=" + freqOffset + " proxFP=" + proxOffset + " this=" + this);
 
       return this;
