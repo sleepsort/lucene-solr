@@ -22,6 +22,8 @@ import java.io.IOException;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.PostingsReaderBase;
+import org.apache.lucene.codecs.TermMetaData;
+import org.apache.lucene.codecs.TermProtoData;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
@@ -105,139 +107,67 @@ public class SepPostingsReader extends PostingsReaderBase {
     IOUtils.close(freqIn, docIn, skipIn, posIn, payloadIn);
   }
 
-  private static final class SepTermState extends BlockTermState {
-    // We store only the seek point to the docs file because
-    // the rest of the info (freqIndex, posIndex, etc.) is
-    // stored in the docs file:
-    IntIndexInput.Index docIndex;
-    IntIndexInput.Index posIndex;
-    IntIndexInput.Index freqIndex;
-    long payloadFP;
-    long skipFP;
-
-    // Only used for "primary" term state; these are never
-    // copied on clone:
-    
-    // TODO: these should somehow be stored per-TermsEnum
-    // not per TermState; maybe somehow the terms dict
-    // should load/manage the byte[]/DataReader for us?
-    byte[] bytes;
-    ByteArrayDataInput bytesReader;
-
-    @Override
-    public SepTermState clone() {
-      SepTermState other = new SepTermState();
-      other.copyFrom(this);
-      return other;
-    }
-
-    @Override
-    public void copyFrom(TermState _other) {
-      super.copyFrom(_other);
-      SepTermState other = (SepTermState) _other;
-      if (docIndex == null) {
-        docIndex = other.docIndex.clone();
-      } else {
-        docIndex.copyFrom(other.docIndex);
-      }
-      if (other.freqIndex != null) {
-        if (freqIndex == null) {
-          freqIndex = other.freqIndex.clone();
-        } else {
-          freqIndex.copyFrom(other.freqIndex);
-        }
-      } else {
-        freqIndex = null;
-      }
-      if (other.posIndex != null) {
-        if (posIndex == null) {
-          posIndex = other.posIndex.clone();
-        } else {
-          posIndex.copyFrom(other.posIndex);
-        }
-      } else {
-        posIndex = null;
-      }
-      payloadFP = other.payloadFP;
-      skipFP = other.skipFP;
-    }
-
-    @Override
-    public String toString() {
-      return super.toString() + " docIndex=" + docIndex + " freqIndex=" + freqIndex + " posIndex=" + posIndex + " payloadFP=" + payloadFP + " skipFP=" + skipFP;
-    }
+  public TermMetaData newMetaData() {
+    return new TermMetaData();
   }
 
   @Override
-  public BlockTermState newTermState() throws IOException {
-    final SepTermState state = new SepTermState();
-    state.docIndex = docIn.index();
-    if (freqIn != null) {
-      state.freqIndex = freqIn.index();
-    }
-    if (posIn != null) {
-      state.posIndex = posIn.index();
-    }
-    return state;
-  }
-
-  @Override
-  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, BlockTermState _termState) throws IOException {
-    final SepTermState termState = (SepTermState) _termState;
+  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, TermProtoData proto) throws IOException {
+    final SepMetaData meta = (SepMetaData)proto.meta;
     //System.out.println("SEPR: readTermsBlock termsIn.fp=" + termsIn.getFilePointer());
     final int len = termsIn.readVInt();
     //System.out.println("  numBytes=" + len);
-    if (termState.bytes == null) {
-      termState.bytes = new byte[ArrayUtil.oversize(len, 1)];
-      termState.bytesReader = new ByteArrayDataInput(termState.bytes);
-    } else if (termState.bytes.length < len) {
-      termState.bytes = new byte[ArrayUtil.oversize(len, 1)];
+    if (meta.bytes == null) {
+      meta.bytes = new byte[ArrayUtil.oversize(len, 1)];
+      meta.bytesReader = new ByteArrayDataInput(meta.bytes);
+    } else if (meta.bytes.length < len) {
+      meta.bytes = new byte[ArrayUtil.oversize(len, 1)];
     }
-    termState.bytesReader.reset(termState.bytes, 0, len);
-    termsIn.readBytes(termState.bytes, 0, len);
+    meta.bytesReader.reset(meta.bytes, 0, len);
+    termsIn.readBytes(meta.bytes, 0, len);
   }
 
   @Override
-  public void nextTerm(FieldInfo fieldInfo, BlockTermState _termState) throws IOException {
-    final SepTermState termState = (SepTermState) _termState;
-    final boolean isFirstTerm = termState.termBlockOrd == 0;
-    //System.out.println("SEPR.nextTerm termCount=" + termState.termBlockOrd + " isFirstTerm=" + isFirstTerm + " bytesReader.pos=" + termState.bytesReader.getPosition());
-    //System.out.println("  docFreq=" + termState.docFreq);
-    termState.docIndex.read(termState.bytesReader, isFirstTerm);
-    //System.out.println("  docIndex=" + termState.docIndex);
+  public void nextTerm(FieldInfo fieldInfo, TermProtoData proto) throws IOException {
+    final SepMetaData meta = (SepMetaData)proto.meta;
+    final BlockTermState state = proto.state;
+    final boolean isFirstTerm = state.termBlockOrd == 0;
+    //System.out.println("SEPR.nextTerm termCount=" + state.termBlockOrd + " isFirstTerm=" + isFirstTerm + " bytesReader.pos=" + meta.bytesReader.getPosition());
+    //System.out.println("  docFreq=" + state.docFreq);
+    meta.docIndex.read(meta.bytesReader, isFirstTerm);
+    //System.out.println("  docIndex=" + meta.docIndex);
     if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
-      termState.freqIndex.read(termState.bytesReader, isFirstTerm);
+      meta.freqIndex.read(meta.bytesReader, isFirstTerm);
       if (fieldInfo.getIndexOptions() == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) {
-        //System.out.println("  freqIndex=" + termState.freqIndex);
-        termState.posIndex.read(termState.bytesReader, isFirstTerm);
-        //System.out.println("  posIndex=" + termState.posIndex);
+        //System.out.println("  freqIndex=" + meta.freqIndex);
+        meta.posIndex.read(meta.bytesReader, isFirstTerm);
+        //System.out.println("  posIndex=" + meta.posIndex);
         if (fieldInfo.hasPayloads()) {
           if (isFirstTerm) {
-            termState.payloadFP = termState.bytesReader.readVLong();
+            meta.payloadFP = meta.bytesReader.readVLong();
           } else {
-            termState.payloadFP += termState.bytesReader.readVLong();
+            meta.payloadFP += meta.bytesReader.readVLong();
           }
-          //System.out.println("  payloadFP=" + termState.payloadFP);
+          //System.out.println("  payloadFP=" + meta.payloadFP);
         }
       }
     }
 
-    if (termState.docFreq >= skipMinimum) {
-      //System.out.println("   readSkip @ " + termState.bytesReader.getPosition());
+    if (state.docFreq >= skipMinimum) {
+      //System.out.println("   readSkip @ " + meta.bytesReader.getPosition());
       if (isFirstTerm) {
-        termState.skipFP = termState.bytesReader.readVLong();
+        meta.skipFP = meta.bytesReader.readVLong();
       } else {
-        termState.skipFP += termState.bytesReader.readVLong();
+        meta.skipFP += meta.bytesReader.readVLong();
       }
-      //System.out.println("  skipFP=" + termState.skipFP);
+      //System.out.println("  skipFP=" + meta.skipFP);
     } else if (isFirstTerm) {
-      termState.skipFP = 0;
+      meta.skipFP = 0;
     }
   }
 
   @Override
-  public DocsEnum docs(FieldInfo fieldInfo, BlockTermState _termState, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
-    final SepTermState termState = (SepTermState) _termState;
+  public DocsEnum docs(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
     SepDocsEnum docsEnum;
     if (reuse == null || !(reuse instanceof SepDocsEnum)) {
       docsEnum = new SepDocsEnum();
@@ -251,16 +181,15 @@ public class SepPostingsReader extends PostingsReaderBase {
       }
     }
 
-    return docsEnum.init(fieldInfo, termState, liveDocs);
+    return docsEnum.init(fieldInfo, proto, liveDocs);
   }
 
   @Override
-  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, BlockTermState _termState, Bits liveDocs,
+  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs,
                                                DocsAndPositionsEnum reuse, int flags)
     throws IOException {
 
     assert fieldInfo.getIndexOptions() == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS;
-    final SepTermState termState = (SepTermState) _termState;
     SepDocsAndPositionsEnum postingsEnum;
     if (reuse == null || !(reuse instanceof SepDocsAndPositionsEnum)) {
       postingsEnum = new SepDocsAndPositionsEnum();
@@ -274,7 +203,7 @@ public class SepPostingsReader extends PostingsReaderBase {
       }
     }
 
-    return postingsEnum.init(fieldInfo, termState, liveDocs);
+    return postingsEnum.init(fieldInfo, proto, liveDocs);
   }
 
   class SepDocsEnum extends DocsEnum {
@@ -322,7 +251,9 @@ public class SepPostingsReader extends PostingsReaderBase {
       }
     }
 
-    SepDocsEnum init(FieldInfo fieldInfo, SepTermState termState, Bits liveDocs) throws IOException {
+    SepDocsEnum init(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs) throws IOException {
+      final SepMetaData meta = (SepMetaData)proto.meta;
+      final BlockTermState state = proto.state;
       this.liveDocs = liveDocs;
       this.indexOptions = fieldInfo.getIndexOptions();
       omitTF = indexOptions == IndexOptions.DOCS_ONLY;
@@ -330,17 +261,17 @@ public class SepPostingsReader extends PostingsReaderBase {
 
       // TODO: can't we only do this if consumer
       // skipped consuming the previous docs?
-      docIndex.copyFrom(termState.docIndex);
+      docIndex.copyFrom(meta.docIndex);
       docIndex.seek(docReader);
 
       if (!omitTF) {
-        freqIndex.copyFrom(termState.freqIndex);
+        freqIndex.copyFrom(meta.freqIndex);
         freqIndex.seek(freqReader);
       }
 
-      docFreq = termState.docFreq;
+      docFreq = state.docFreq;
       // NOTE: unused if docFreq < skipMinimum:
-      skipFP = termState.skipFP;
+      skipFP = meta.skipFP;
       count = 0;
       doc = -1;
       accum = 0;
@@ -492,31 +423,33 @@ public class SepPostingsReader extends PostingsReaderBase {
       payloadIn = SepPostingsReader.this.payloadIn.clone();
     }
 
-    SepDocsAndPositionsEnum init(FieldInfo fieldInfo, SepTermState termState, Bits liveDocs) throws IOException {
+    SepDocsAndPositionsEnum init(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs) throws IOException {
+      final SepMetaData meta = (SepMetaData)proto.meta;
+      final BlockTermState state = proto.state;
       this.liveDocs = liveDocs;
       storePayloads = fieldInfo.hasPayloads();
       //System.out.println("Sep D&P init");
 
       // TODO: can't we only do this if consumer
       // skipped consuming the previous docs?
-      docIndex.copyFrom(termState.docIndex);
+      docIndex.copyFrom(meta.docIndex);
       docIndex.seek(docReader);
       //System.out.println("  docIndex=" + docIndex);
 
-      freqIndex.copyFrom(termState.freqIndex);
+      freqIndex.copyFrom(meta.freqIndex);
       freqIndex.seek(freqReader);
       //System.out.println("  freqIndex=" + freqIndex);
 
-      posIndex.copyFrom(termState.posIndex);
+      posIndex.copyFrom(meta.posIndex);
       //System.out.println("  posIndex=" + posIndex);
       posSeekPending = true;
       payloadPending = false;
 
-      payloadFP = termState.payloadFP;
-      skipFP = termState.skipFP;
+      payloadFP = meta.payloadFP;
+      skipFP = meta.skipFP;
       //System.out.println("  skipFP=" + skipFP);
 
-      docFreq = termState.docFreq;
+      docFreq = state.docFreq;
       count = 0;
       doc = -1;
       accum = 0;
