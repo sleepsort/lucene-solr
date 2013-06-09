@@ -34,11 +34,12 @@ public class BlockTermState extends OrdTermState {
   /** the term's ord in the current block */
   public int termBlockOrd;
   /** fp into the terms dict primary file (_X.tim) that holds this term */
+  // TODO: only used in BlockTermDict
   public long blockFilePointer;
 
   /** Sole constructor. (For invocation by subclass 
    *  constructors, typically implicit.) */
-  protected BlockTermState() {
+  public BlockTermState() {
   }
 
   @Override

@@ -2205,7 +2205,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
       }
 
       @Override
-      public void seekExact(BytesRef target, TermState otherState) {
+      public void seekExact(BytesRef target, TermState otherState) { // TODO: should the TermState glued with TermMetaData here?
         // if (DEBUG) {
         //   System.out.println("BTTR.seekExact termState seg=" + segment + " target=" + target.utf8ToString() + " " + target + " state=" + otherState);
         // }

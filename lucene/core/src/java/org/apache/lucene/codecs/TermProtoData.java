@@ -31,6 +31,13 @@ public class TermProtoData {
     return state;
   }
 
+  public TermProtoData clone() {
+    TermProtoData copy = new TermProtoData();
+    copy.state.copyFrom(state);
+    copy.meta = meta.clone();
+    return copy;
+  }
+
   @Override
   public String toString() {
     return "TermProtoData";

@@ -63,6 +63,10 @@ public class TermMetaData {
     this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
   }
 
+  public TermMetaData clone() {  // since it is already final, no deep copy!
+    return new TermMetaData(base, extend);
+  }
+
   public String toString() {
     return base.toString() + " " + extend.toString();
   }
