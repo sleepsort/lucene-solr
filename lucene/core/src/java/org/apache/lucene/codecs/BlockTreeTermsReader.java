@@ -27,6 +27,8 @@ import java.util.Iterator;
 import java.util.Locale;
 import java.util.TreeMap;
 
+import org.apache.lucene.codecs.TermProtoData;
+import org.apache.lucene.codecs.TermMetaData;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
@@ -579,7 +581,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
         long lastSubFP;
 
         // State in automaton
-        int state;
+        int fsaState;
 
         int metaDataUpto;
 
@@ -617,7 +619,8 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
         FST.Arc<BytesRef> arc;
 
-        final BlockTermState termState;
+        final TermProtoData proto;
+        final BlockTermState state; // nocommit: nested in proto
 
         // Cumulative output so far
         BytesRef outputPrefix;
@@ -627,8 +630,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
         public Frame(int ord) throws IOException {
           this.ord = ord;
-          termState = postingsReader.newTermState();
-          termState.totalTermFreq = -1;
+          this.state = new BlockTermState();
+          this.state.totalTermFreq = -1;
+          this.proto = new TermProtoData(state, postingsReader.newMetaData());
         }
 
         void loadNextFloorBlock() throws IOException {
@@ -650,10 +654,10 @@ public class BlockTreeTermsReader extends FieldsProducer {
           load(null);
         }
 
-        public void setState(int state) {
-          this.state = state;
+        public void setState(int fsaState) {
+          this.fsaState = fsaState;
           transitionIndex = 0;
-          transitions = compiledAutomaton.sortedTransitions[state];
+          transitions = compiledAutomaton.sortedTransitions[fsaState];
           if (transitions.length != 0) {
             curTransitionMax = transitions[0].getMax();
           } else {
@@ -682,7 +686,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
               // If current state is accept, we must process
               // first block in case it has empty suffix:
-              if (!runAutomaton.isAccept(state)) {
+              if (!runAutomaton.isAccept(fsaState)) {
                 // Maybe skip floor blocks:
                 while (numFollowFloorBlocks != 0 && nextFloorLabel <= transitions[0].getMin()) {
                   fp = fpOrig + (floorDataReader.readVLong() >>> 1);
@@ -724,10 +728,10 @@ public class BlockTreeTermsReader extends FieldsProducer {
           statsReader.reset(statBytes, 0, numBytes);
           metaDataUpto = 0;
 
-          termState.termBlockOrd = 0;
+          state.termBlockOrd = 0;
           nextEnt = 0;
           
-          postingsReader.readTermsBlock(in, fieldInfo, termState);
+          postingsReader.readTermsBlock(in, fieldInfo, proto);
 
           if (!isLastInFloor) {
             // Sub-blocks of a single floor block are always
@@ -763,7 +767,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
           suffixesReader.skipBytes(suffix);
           if ((code & 1) == 0) {
             // A normal term
-            termState.termBlockOrd++;
+            state.termBlockOrd++;
             return false;
           } else {
             // A sub-block; make sub-FP absolute:
@@ -773,7 +777,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
         }
 
         public int getTermBlockOrd() {
-          return isLeafBlock ? nextEnt : termState.termBlockOrd;
+          return isLeafBlock ? nextEnt : state.termBlockOrd;
         }
 
         public void decodeMetaData() throws IOException {
@@ -784,7 +788,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
           // We must set/incr state.termCount because
           // postings impl can look at this
-          termState.termBlockOrd = metaDataUpto;
+          state.termBlockOrd = metaDataUpto;
       
           // TODO: better API would be "jump straight to term=N"???
           while (metaDataUpto < limit) {
@@ -797,16 +801,16 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
             // TODO: if docFreq were bulk decoded we could
             // just skipN here:
-            termState.docFreq = statsReader.readVInt();
+            state.docFreq = statsReader.readVInt();
             //if (DEBUG) System.out.println("    dF=" + state.docFreq);
             if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
-              termState.totalTermFreq = termState.docFreq + statsReader.readVLong();
+              state.totalTermFreq = state.docFreq + statsReader.readVLong();
               //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
             }
 
-            postingsReader.nextTerm(fieldInfo, termState);
+            postingsReader.nextTerm(fieldInfo, proto);
             metaDataUpto++;
-            termState.termBlockOrd++;
+            state.termBlockOrd++;
           }
         }
       }
@@ -874,7 +878,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
       @Override
       public TermState termState() throws IOException {
         currentFrame.decodeMetaData();
-        return currentFrame.termState.clone();
+        return currentFrame.proto.state.clone();
       }
 
       private Frame getFrame(int ord) throws IOException {
@@ -947,19 +951,19 @@ public class BlockTreeTermsReader extends FieldsProducer {
         //if (DEBUG) System.out.println("BTIR.docFreq");
         currentFrame.decodeMetaData();
         //if (DEBUG) System.out.println("  return " + currentFrame.termState.docFreq);
-        return currentFrame.termState.docFreq;
+        return currentFrame.state.docFreq;
       }
 
       @Override
       public long totalTermFreq() throws IOException {
         currentFrame.decodeMetaData();
-        return currentFrame.termState.totalTermFreq;
+        return currentFrame.state.totalTermFreq;
       }
 
       @Override
       public DocsEnum docs(Bits skipDocs, DocsEnum reuse, int flags) throws IOException {
         currentFrame.decodeMetaData();
-        return postingsReader.docs(fieldInfo, currentFrame.termState, skipDocs, reuse, flags);
+        return postingsReader.docs(fieldInfo, currentFrame.proto, skipDocs, reuse, flags);
       }
 
       @Override
@@ -970,16 +974,16 @@ public class BlockTreeTermsReader extends FieldsProducer {
         }
 
         currentFrame.decodeMetaData();
-        return postingsReader.docsAndPositions(fieldInfo, currentFrame.termState, skipDocs, reuse, flags);
+        return postingsReader.docsAndPositions(fieldInfo, currentFrame.proto, skipDocs, reuse, flags);
       }
 
       private int getState() {
-        int state = currentFrame.state;
+        int fsaState = currentFrame.fsaState;
         for(int idx=0;idx<currentFrame.suffix;idx++) {
-          state = runAutomaton.step(state,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
-          assert state != -1;
+          fsaState = runAutomaton.step(fsaState,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
+          assert fsaState != -1;
         }
-        return state;
+        return fsaState;
       }
 
       // NOTE: specialized to only doing the first-time
@@ -1002,7 +1006,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
             final int saveStartBytePos = currentFrame.startBytePos;
             final int saveSuffix = currentFrame.suffix;
             final long saveLastSubFP = currentFrame.lastSubFP;
-            final int saveTermBlockOrd = currentFrame.termState.termBlockOrd;
+            final int saveTermBlockOrd = currentFrame.state.termBlockOrd;
 
             final boolean isSubBlock = currentFrame.next();
 
@@ -1045,7 +1049,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
                 currentFrame.startBytePos = saveStartBytePos;
                 currentFrame.suffix = saveSuffix;
                 currentFrame.suffixesReader.setPosition(savePos);
-                currentFrame.termState.termBlockOrd = saveTermBlockOrd;
+                currentFrame.state.termBlockOrd = saveTermBlockOrd;
                 System.arraycopy(currentFrame.suffixBytes, currentFrame.startBytePos, term.bytes, currentFrame.prefix, currentFrame.suffix);
                 term.length = currentFrame.prefix + currentFrame.suffix;
                 // If the last entry was a block we don't
@@ -1177,10 +1181,10 @@ public class BlockTreeTermsReader extends FieldsProducer {
           // until the limit
 
           // See if the term prefix matches the automaton:
-          int state = currentFrame.state;
+          int fsaState = currentFrame.fsaState;
           for (int idx=0;idx<currentFrame.suffix;idx++) {
-            state = runAutomaton.step(state,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
-            if (state == -1) {
+            fsaState = runAutomaton.step(fsaState,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
+            if (fsaState == -1) {
               // No match
               //System.out.println("    no s=" + state);
               continue nextTerm;
@@ -1193,9 +1197,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
             // Match!  Recurse:
             //if (DEBUG) System.out.println("      sub-block match to state=" + state + "; recurse fp=" + currentFrame.lastSubFP);
             copyTerm();
-            currentFrame = pushFrame(state);
+            currentFrame = pushFrame(fsaState);
             //if (DEBUG) System.out.println("\n  frame ord=" + currentFrame.ord + " prefix=" + brToString(new BytesRef(term.bytes, term.offset, currentFrame.prefix)) + " state=" + currentFrame.state + " lastInFloor?=" + currentFrame.isLastInFloor + " fp=" + currentFrame.fp + " trans=" + (currentFrame.transitions.length == 0 ? "n/a" : currentFrame.transitions[currentFrame.transitionIndex]) + " outputPrefix=" + currentFrame.outputPrefix);
-          } else if (runAutomaton.isAccept(state)) {
+          } else if (runAutomaton.isAccept(fsaState)) {
             copyTerm();
             //if (DEBUG) System.out.println("      term match to state=" + state + "; return term=" + brToString(term));
             assert savedStartTerm == null || term.compareTo(savedStartTerm) > 0: "saveStartTerm=" + savedStartTerm.utf8ToString() + " term=" + term.utf8ToString();
@@ -1472,7 +1476,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
         } else {
           f.nextEnt = -1;
           f.prefix = length;
-          f.state.termBlockOrd = 0;
+          f.proto.state.termBlockOrd = 0;
           f.fpOrig = f.fp = fp;
           f.lastSubFP = -1;
           // if (DEBUG) {
@@ -2185,7 +2189,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
         //if (DEBUG) {
         //System.out.println("  state=" + currentFrame.state);
         //}
-        return postingsReader.docs(fieldInfo, currentFrame.state, skipDocs, reuse, flags);
+        return postingsReader.docs(fieldInfo, currentFrame.proto, skipDocs, reuse, flags);
       }
 
       @Override
@@ -2197,7 +2201,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
         assert !eof;
         currentFrame.decodeMetaData();
-        return postingsReader.docsAndPositions(fieldInfo, currentFrame.state, skipDocs, reuse, flags);
+        return postingsReader.docsAndPositions(fieldInfo, currentFrame.proto, skipDocs, reuse, flags);
       }
 
       @Override
@@ -2209,7 +2213,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
         if (target.compareTo(term) != 0 || !termExists) {
           assert otherState != null && otherState instanceof BlockTermState;
           currentFrame = staticFrame;
-          currentFrame.state.copyFrom(otherState);
+          currentFrame.proto.state.copyFrom(otherState);
           term.copyBytes(target);
           currentFrame.metaDataUpto = currentFrame.getTermBlockOrd();
           assert currentFrame.metaDataUpto > 0;
@@ -2225,7 +2229,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
       public TermState termState() throws IOException {
         assert !eof;
         currentFrame.decodeMetaData();
-        TermState ts = currentFrame.state.clone();
+        TermState ts = currentFrame.proto.state.clone();
         //if (DEBUG) System.out.println("BTTR.termState seg=" + segment + " state=" + ts);
         return ts;
       }
@@ -2295,12 +2299,14 @@ public class BlockTreeTermsReader extends FieldsProducer {
         // metaData
         int metaDataUpto;
 
+        final TermProtoData proto;
         final BlockTermState state;
 
         public Frame(int ord) throws IOException {
           this.ord = ord;
-          state = postingsReader.newTermState();
-          state.totalTermFreq = -1;
+          this.state = new BlockTermState();
+          this.state.totalTermFreq = -1;
+          this.proto = new TermProtoData(state, postingsReader.newMetaData());
         }
 
         public void setFloorData(ByteArrayDataInput in, BytesRef source) {
@@ -2398,7 +2404,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
           // TODO: we could skip this if !hasTerms; but
           // that's rare so won't help much
-          postingsReader.readTermsBlock(in, fieldInfo, state);
+          postingsReader.readTermsBlock(in, fieldInfo, proto);
 
           // Sub-blocks of a single floor block are always
           // written one after another -- tail recurse:
@@ -2606,7 +2612,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
               //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
             }
 
-            postingsReader.nextTerm(fieldInfo, state);
+            postingsReader.nextTerm(fieldInfo, proto);
             metaDataUpto++;
             state.termBlockOrd++;
           }
