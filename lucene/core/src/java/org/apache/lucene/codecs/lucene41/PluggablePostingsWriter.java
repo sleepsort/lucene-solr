@@ -348,25 +348,7 @@ public final class PluggablePostingsWriter extends PluggablePostingsWriterBase {
     }
   }
 
-  private static class PendingTerm {
-    public final long docStartFP;
-    public final long posStartFP;
-    public final long payStartFP;
-    public final long skipOffset;
-    public final long lastPosBlockOffset;
-    public final int singletonDocID;
-
-    public PendingTerm(long docStartFP, long posStartFP, long payStartFP, long skipOffset, long lastPosBlockOffset, int singletonDocID) {
-      this.docStartFP = docStartFP;
-      this.posStartFP = posStartFP;
-      this.payStartFP = payStartFP;
-      this.skipOffset = skipOffset;
-      this.lastPosBlockOffset = lastPosBlockOffset;
-      this.singletonDocID = singletonDocID;
-    }
-  }
-
-  private final List<PendingTerm> pendingTerms = new ArrayList<PendingTerm>();
+  private final List<PluggableMetaData> pendingTerms = new ArrayList<PluggableMetaData>();
 
   /** Called when we are done adding docs to this term */
   @Override
@@ -517,7 +499,7 @@ public final class PluggablePostingsWriter extends PluggablePostingsWriterBase {
     //   System.out.println("  payStartFP=" + payStartFP);
     // }
 
-    pendingTerms.add(new PendingTerm(docTermStartFP, posTermStartFP, payStartFP, skipOffset, lastPosBlockOffset, singletonDocID));
+    pendingTerms.add(new PluggableMetaData(docTermStartFP, posTermStartFP, payStartFP, skipOffset, lastPosBlockOffset, singletonDocID));
     docBufferUpto = 0;
     posBufferUpto = 0;
     lastDocID = 0;
@@ -543,7 +525,7 @@ public final class PluggablePostingsWriter extends PluggablePostingsWriterBase {
     long lastPosStartFP = 0;
     long lastPayStartFP = 0;
     for(int idx=limit-count; idx<limit; idx++) {
-      PendingTerm term = pendingTerms.get(idx);
+      PluggableMetaData term = pendingTerms.get(idx);
 
       if (term.singletonDocID == -1) {
         bytesWriter.writeVLong(term.docStartFP - lastDocStartFP);

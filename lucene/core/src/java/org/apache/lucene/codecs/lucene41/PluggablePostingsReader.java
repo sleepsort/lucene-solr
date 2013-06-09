@@ -143,49 +143,6 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
     }
   }
 
-  // Must keep final because we do non-standard clone
-  private final static class PluggableMetaData extends TermMetaData {
-    long docStartFP;
-    long posStartFP;
-    long payStartFP;
-    long skipOffset;
-    long lastPosBlockOffset;
-    // docid when there is a single pulsed posting, otherwise -1
-    // freq is always implicitly totalTermFreq in this case.
-    int singletonDocID;
-
-    // Only used by the "primary" TermState -- clones don't
-    // copy this (basically they are "transient"):
-    ByteArrayDataInput bytesReader;  // TODO: should this NOT be in the TermState...?
-    byte[] bytes;
-
-    public PluggableMetaData clone() {
-      PluggableMetaData other = new PluggableMetaData();
-      other.copyFrom(this);
-      return other;
-    }
-
-    public void copyFrom(TermMetaData _other) {
-      PluggableMetaData other = (PluggableMetaData) _other;
-      docStartFP = other.docStartFP;
-      posStartFP = other.posStartFP;
-      payStartFP = other.payStartFP;
-      lastPosBlockOffset = other.lastPosBlockOffset;
-      skipOffset = other.skipOffset;
-      singletonDocID = other.singletonDocID;
-
-      // Do not copy bytes, bytesReader (else TermMetaData is
-      // very heavy, ie drags around the entire block's
-      // byte[]).  On seek back, if next() is in fact used
-      // (rare!), they will be re-read from disk.
-    }
-
-    @Override
-    public String toString() {
-      return super.toString() + " docStartFP=" + docStartFP + " posStartFP=" + posStartFP + " payStartFP=" + payStartFP + " lastPosBlockOffset=" + lastPosBlockOffset + " singletonDocID=" + singletonDocID;
-    }
-  }
-
   @Override
   public TermMetaData newMetaData() {
     return new PluggableMetaData();
