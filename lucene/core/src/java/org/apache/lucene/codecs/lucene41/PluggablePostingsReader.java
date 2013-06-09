@@ -144,7 +144,7 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
   }
 
   // Must keep final because we do non-standard clone
-  private final static class IntBlockTermState extends BlockTermState {
+  private final static class PluggableMetaData extends TermMetaData {
     long docStartFP;
     long posStartFP;
     long payStartFP;
@@ -159,17 +159,14 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
     ByteArrayDataInput bytesReader;  // TODO: should this NOT be in the TermState...?
     byte[] bytes;
 
-    @Override
-    public IntBlockTermState clone() {
-      IntBlockTermState other = new IntBlockTermState();
+    public PluggableMetaData clone() {
+      PluggableMetaData other = new PluggableMetaData();
       other.copyFrom(this);
       return other;
     }
 
-    @Override
-    public void copyFrom(TermState _other) {
-      super.copyFrom(_other);
-      IntBlockTermState other = (IntBlockTermState) _other;
+    public void copyFrom(TermMetaData _other) {
+      PluggableMetaData other = (PluggableMetaData) _other;
       docStartFP = other.docStartFP;
       posStartFP = other.posStartFP;
       payStartFP = other.payStartFP;
@@ -177,7 +174,7 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
       skipOffset = other.skipOffset;
       singletonDocID = other.singletonDocID;
 
-      // Do not copy bytes, bytesReader (else TermState is
+      // Do not copy bytes, bytesReader (else TermMetaData is
       // very heavy, ie drags around the entire block's
       // byte[]).  On seek back, if next() is in fact used
       // (rare!), they will be re-read from disk.
@@ -190,20 +187,8 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
   }
 
   @Override
-  public TermProtoData newProtoData(FieldInfo info) {
-  }
-
-  public int getProtoLength(FieldInfo info) {
-    final boolean hasPositions = info.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
-    final boolean hasOffsets = info.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
-    final boolean hasPayloads = info.hasPayloads();
-    if (hasPositions) {
-      if (hasPayloads || hasOffsets) {
-        return 3;
-      }
-      return 2;
-    }
-    return 1;
+  public TermMetaData newMetaData() {
+    return new PluggableMetaData();
   }
 
   @Override
@@ -214,87 +199,88 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
   /* Reads but does not decode the byte[] blob holding
      metadata for the current terms block */
   @Override
-  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, BlockTermState _termState) throws IOException {
-    final IntBlockTermState termState = (IntBlockTermState) _termState;
+  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, TermProtoData proto) throws IOException {
+    final PluggableMetaData meta= (PluggableMetaData)proto.meta;
 
     final int numBytes = termsIn.readVInt();
 
-    if (termState.bytes == null) {
-      termState.bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
-      termState.bytesReader = new ByteArrayDataInput();
-    } else if (termState.bytes.length < numBytes) {
-      termState.bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
+    if (meta.bytes == null) {
+      meta.bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
+      meta.bytesReader = new ByteArrayDataInput();
+    } else if (meta.bytes.length < numBytes) {
+      meta.bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
     }
 
-    termsIn.readBytes(termState.bytes, 0, numBytes);
-    termState.bytesReader.reset(termState.bytes, 0, numBytes);
+    termsIn.readBytes(meta.bytes, 0, numBytes);
+    meta.bytesReader.reset(meta.bytes, 0, numBytes);
   }
 
   @Override
-  public void nextTerm(FieldInfo fieldInfo, BlockTermState _termState)
+  public void nextTerm(FieldInfo fieldInfo, TermProtoData proto)
     throws IOException {
-    final IntBlockTermState termState = (IntBlockTermState) _termState;
-    final boolean isFirstTerm = termState.termBlockOrd == 0;
+    final BlockTermState state = proto.state;
+    final PluggableMetaData meta= (PluggableMetaData)proto.meta;
+    final boolean isFirstTerm = state.termBlockOrd == 0;
     final boolean fieldHasPositions = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
     final boolean fieldHasOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
     final boolean fieldHasPayloads = fieldInfo.hasPayloads();
 
-    final DataInput in = termState.bytesReader;
+    final DataInput in = meta.bytesReader;
     if (isFirstTerm) {
-      if (termState.docFreq == 1) {
-        termState.singletonDocID = in.readVInt();
-        termState.docStartFP = 0;
+      if (state.docFreq == 1) {
+        meta.singletonDocID = in.readVInt();
+        meta.docStartFP = 0;
       } else {
-        termState.singletonDocID = -1;
-        termState.docStartFP = in.readVLong();
+        meta.singletonDocID = -1;
+        meta.docStartFP = in.readVLong();
       }
       if (fieldHasPositions) {
-        termState.posStartFP = in.readVLong();
-        if (termState.totalTermFreq > BLOCK_SIZE) {
-          termState.lastPosBlockOffset = in.readVLong();
+        meta.posStartFP = in.readVLong();
+        if (state.totalTermFreq > BLOCK_SIZE) {
+          meta.lastPosBlockOffset = in.readVLong();
         } else {
-          termState.lastPosBlockOffset = -1;
+          meta.lastPosBlockOffset = -1;
         }
-        if ((fieldHasPayloads || fieldHasOffsets) && termState.totalTermFreq >= BLOCK_SIZE) {
-          termState.payStartFP = in.readVLong();
+        if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
+          meta.payStartFP = in.readVLong();
         } else {
-          termState.payStartFP = -1;
+          meta.payStartFP = -1;
         }
       }
     } else {
-      if (termState.docFreq == 1) {
-        termState.singletonDocID = in.readVInt();
+      if (state.docFreq == 1) {
+        meta.singletonDocID = in.readVInt();
       } else {
-        termState.singletonDocID = -1;
-        termState.docStartFP += in.readVLong();
+        meta.singletonDocID = -1;
+        meta.docStartFP += in.readVLong();
       }
       if (fieldHasPositions) {
-        termState.posStartFP += in.readVLong();
-        if (termState.totalTermFreq > BLOCK_SIZE) {
-          termState.lastPosBlockOffset = in.readVLong();
+        meta.posStartFP += in.readVLong();
+        if (state.totalTermFreq > BLOCK_SIZE) {
+          meta.lastPosBlockOffset = in.readVLong();
         } else {
-          termState.lastPosBlockOffset = -1;
+          meta.lastPosBlockOffset = -1;
         }
-        if ((fieldHasPayloads || fieldHasOffsets) && termState.totalTermFreq >= BLOCK_SIZE) {
+        if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
           long delta = in.readVLong();
-          if (termState.payStartFP == -1) {
-            termState.payStartFP = delta;
+          if (meta.payStartFP == -1) {
+            meta.payStartFP = delta;
           } else {
-            termState.payStartFP += delta;
+            meta.payStartFP += delta;
           }
         }
       }
     }
 
-    if (termState.docFreq > BLOCK_SIZE) {
-      termState.skipOffset = in.readVLong();
+    if (state.docFreq > BLOCK_SIZE) {
+      meta.skipOffset = in.readVLong();
     } else {
-      termState.skipOffset = -1;
+      meta.skipOffset = -1;
     }
   }
     
   @Override
-  public DocsEnum docs(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
+  public DocsEnum docs(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
     BlockDocsEnum docsEnum;
     if (reuse instanceof BlockDocsEnum) {
       docsEnum = (BlockDocsEnum) reuse;
@@ -304,13 +290,13 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
     } else {
       docsEnum = new BlockDocsEnum(fieldInfo);
     }
-    return docsEnum.reset(liveDocs, (IntBlockTermState) termState, flags);
+    return docsEnum.reset(liveDocs, proto, flags);
   }
 
   // TODO: specialize to liveDocs vs not
   
   @Override
-  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs,
+  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs,
                                                DocsAndPositionsEnum reuse, int flags)
     throws IOException {
 
@@ -328,7 +314,7 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
       } else {
         docsAndPositionsEnum = new BlockDocsAndPositionsEnum(fieldInfo);
       }
-      return docsAndPositionsEnum.reset(liveDocs, (IntBlockTermState) termState);
+      return docsAndPositionsEnum.reset(liveDocs, proto);
     } else {
       EverythingEnum everythingEnum;
       if (reuse instanceof EverythingEnum) {
@@ -339,7 +325,7 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
       } else {
         everythingEnum = new EverythingEnum(fieldInfo);
       }
-      return everythingEnum.reset(liveDocs, (IntBlockTermState) termState, flags);
+      return everythingEnum.reset(liveDocs, proto, flags);
     }
   }
 
@@ -403,16 +389,18 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
         indexHasPayloads == fieldInfo.hasPayloads();
     }
     
-    public DocsEnum reset(Bits liveDocs, IntBlockTermState termState, int flags) throws IOException {
+    public DocsEnum reset(Bits liveDocs, TermProtoData proto, int flags) throws IOException {
+      final BlockTermState state = proto.state;
+      final PluggableMetaData meta = (PluggableMetaData) proto.meta;
       this.liveDocs = liveDocs;
       // if (DEBUG) {
-      //   System.out.println("  FPR.reset: termState=" + termState);
+      //   System.out.println("  FPR.reset: state=" + state);
       // }
-      docFreq = termState.docFreq;
-      totalTermFreq = indexHasFreq ? termState.totalTermFreq : docFreq;
-      docTermStartFP = termState.docStartFP;
-      skipOffset = termState.skipOffset;
-      singletonDocID = termState.singletonDocID;
+      docFreq = state.docFreq;
+      totalTermFreq = indexHasFreq ? state.totalTermFreq : docFreq;
+      docTermStartFP = meta.docStartFP;
+      skipOffset = meta.skipOffset;
+      singletonDocID = meta.singletonDocID;
       if (docFreq > 1) {
         if (docIn == null) {
           // lazy init
@@ -699,18 +687,20 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
         indexHasPayloads == fieldInfo.hasPayloads();
     }
     
-    public DocsAndPositionsEnum reset(Bits liveDocs, IntBlockTermState termState) throws IOException {
+    public DocsAndPositionsEnum reset(Bits liveDocs, TermProtoData proto) throws IOException {
+      final BlockTermState state = proto.state;
+      final PluggableMetaData meta = (PluggableMetaData) proto.meta;
       this.liveDocs = liveDocs;
       // if (DEBUG) {
-      //   System.out.println("  FPR.reset: termState=" + termState);
+      //   System.out.println("  FPR.reset: state=" + state);
       // }
-      docFreq = termState.docFreq;
-      docTermStartFP = termState.docStartFP;
-      posTermStartFP = termState.posStartFP;
-      payTermStartFP = termState.payStartFP;
-      skipOffset = termState.skipOffset;
-      totalTermFreq = termState.totalTermFreq;
-      singletonDocID = termState.singletonDocID;
+      docFreq = state.docFreq;
+      docTermStartFP = meta.docStartFP;
+      posTermStartFP = meta.posStartFP;
+      payTermStartFP = meta.payStartFP;
+      skipOffset = meta.skipOffset;
+      totalTermFreq = state.totalTermFreq;
+      singletonDocID = meta.singletonDocID;
       if (docFreq > 1) {
         if (docIn == null) {
           // lazy init
@@ -720,12 +710,12 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
       }
       posPendingFP = posTermStartFP;
       posPendingCount = 0;
-      if (termState.totalTermFreq < BLOCK_SIZE) {
+      if (state.totalTermFreq < BLOCK_SIZE) {
         lastPosBlockFP = posTermStartFP;
-      } else if (termState.totalTermFreq == BLOCK_SIZE) {
+      } else if (state.totalTermFreq == BLOCK_SIZE) {
         lastPosBlockFP = -1;
       } else {
-        lastPosBlockFP = posTermStartFP + termState.lastPosBlockOffset;
+        lastPosBlockFP = posTermStartFP + meta.lastPosBlockOffset;
       }
 
       doc = -1;
@@ -1156,18 +1146,20 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
         indexHasPayloads == fieldInfo.hasPayloads();
     }
     
-    public EverythingEnum reset(Bits liveDocs, IntBlockTermState termState, int flags) throws IOException {
+    public EverythingEnum reset(Bits liveDocs, TermProtoData proto, int flags) throws IOException {
+      final BlockTermState state = proto.state;
+      final PluggableMetaData meta = (PluggableMetaData) proto.meta;
       this.liveDocs = liveDocs;
       // if (DEBUG) {
-      //   System.out.println("  FPR.reset: termState=" + termState);
+      //   System.out.println("  FPR.reset: state=" + state);
       // }
-      docFreq = termState.docFreq;
-      docTermStartFP = termState.docStartFP;
-      posTermStartFP = termState.posStartFP;
-      payTermStartFP = termState.payStartFP;
-      skipOffset = termState.skipOffset;
-      totalTermFreq = termState.totalTermFreq;
-      singletonDocID = termState.singletonDocID;
+      docFreq = state.docFreq;
+      docTermStartFP = meta.docStartFP;
+      posTermStartFP = meta.posStartFP;
+      payTermStartFP = meta.payStartFP;
+      skipOffset = meta.skipOffset;
+      totalTermFreq = state.totalTermFreq;
+      singletonDocID = meta.singletonDocID;
       if (docFreq > 1) {
         if (docIn == null) {
           // lazy init
@@ -1178,12 +1170,12 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
       posPendingFP = posTermStartFP;
       payPendingFP = payTermStartFP;
       posPendingCount = 0;
-      if (termState.totalTermFreq < BLOCK_SIZE) {
+      if (state.totalTermFreq < BLOCK_SIZE) {
         lastPosBlockFP = posTermStartFP;
-      } else if (termState.totalTermFreq == BLOCK_SIZE) {
+      } else if (state.totalTermFreq == BLOCK_SIZE) {
         lastPosBlockFP = -1;
       } else {
-        lastPosBlockFP = posTermStartFP + termState.lastPosBlockOffset;
+        lastPosBlockFP = posTermStartFP + meta.lastPosBlockOffset;
       }
 
       this.needsOffsets = (flags & DocsAndPositionsEnum.FLAG_OFFSETS) != 0;

@@ -18,15 +18,15 @@ public abstract class PluggablePostingsReaderBase implements Closeable {
 
   public abstract TermMetaData newMetaData() throws IOException;
 
-  public abstract void nextTerm(FieldInfo fieldInfo, TermProtoData meta) throws IOException;
+  public abstract void nextTerm(FieldInfo fieldInfo, TermProtoData proto) throws IOException;
 
-  public abstract DocsEnum docs(FieldInfo fieldInfo, TermProtoData state, Bits skipDocs, DocsEnum reuse, int flags) throws IOException;
+  public abstract DocsEnum docs(FieldInfo fieldInfo, TermProtoData proto, Bits skipDocs, DocsEnum reuse, int flags) throws IOException;
 
-  public abstract DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TermProtoData meta, Bits skipDocs, DocsAndPositionsEnum reuse,
+  public abstract DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TermProtoData proto, Bits skipDocs, DocsAndPositionsEnum reuse,
                                                         int flags) throws IOException;
 
   @Override
   public abstract void close() throws IOException;
 
-  public abstract void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo) throws IOException;
+  public abstract void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, TermProtoData proto) throws IOException;
 }
