@@ -133,7 +133,7 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
       pos1++;
       pos2++;
     }
-    TermState state = p1.state;
+    BlockTermState state = p1.state;
     TermMetaData meta = new TermMetaData(new LongsRef(share, 0, pos), null);
     return new TermProtoData(state, meta);
   }
@@ -169,7 +169,7 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
     }
     assert p1.state == null || p2.state == null;
 
-    TermState state = (p1.state == null ? p1.state: p2.state);
+    BlockTermState state = (p1.state == null ? p1.state: p2.state);
     TermMetaData meta = new TermMetaData(new LongsRef(accum, 0, pos), null);
     return new TermProtoData(state, meta);
   }
@@ -183,22 +183,22 @@ public class TermProtoOutputs extends Outputs<TermProtoData> {
   public TermProtoData read(DataInput in) throws IOException {
     // nocommit: read byte len, and steal one bit to determine whether 
     // this output contains term state?
-    TermState state = readState(in);
+    BlockTermState state = readState(in);
     TermMetaData meta = readMetaData(state, in);
     return new TermProtoData(state, meta);
   }
 
-  public void writeState(TermState state, DataOutput out) throws IOException {
+  public void writeState(BlockTermState state, DataOutput out) throws IOException {
     throw new IllegalStateException("not implemented");
   }
   // NOTE: will be better if we can aquire TermState to help decoding ...
-  public void writeMetaData(TermMetaData meta, TermState state, DataOutput out) throws IOException {
+  public void writeMetaData(TermMetaData meta, BlockTermState state, DataOutput out) throws IOException {
     throw new IllegalStateException("not implemented");
   }
-  public TermState readState(DataInput in) throws IOException {
+  public BlockTermState readState(DataInput in) throws IOException {
     throw new IllegalStateException("not implemented");
   }
-  public TermMetaData readMetaData(TermState state, DataInput in) throws IOException {
+  public TermMetaData readMetaData(BlockTermState state, DataInput in) throws IOException {
     throw new IllegalStateException("not implemented");
   }
 

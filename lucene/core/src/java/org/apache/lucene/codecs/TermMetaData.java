@@ -1,6 +1,7 @@
 package org.apache.lucene.codecs;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 
 import org.apache.lucene.index.TermState;
@@ -39,14 +40,27 @@ public class TermMetaData {
   public final LongsRef base;
   public final BytesRef extend;
 
+  protected final ByteBuffer buffer;
+
   public TermMetaData() {
     this.base = null;
     this.extend = null;
+    this.buffer = null;
   }
 
   public TermMetaData(LongsRef l, BytesRef b) {
     this.base = l;
     this.extend = b;
+    this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
+  }
+  public TermMetaData(int baseLength, int extendLength) {
+    this.base = new LongsRef(new long[baseLength], 0, baseLength);
+    if (extendLength > 0) {
+      this.extend = new BytesRef(new byte[extendLength]);
+    } else {
+      this.extend = new BytesRef();
+    }
+    this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
   }
 
   public String toString() {

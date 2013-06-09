@@ -31,8 +31,6 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
 
 final class PluggableMetaData extends TermMetaData {
-  long docStartFP;
-  long posStartFP;
   long payStartFP;
   long skipOffset;
   long lastPosBlockOffset;
@@ -47,16 +45,57 @@ final class PluggableMetaData extends TermMetaData {
   byte[] bytes;
 
   public PluggableMetaData(long docStartFP, long posStartFP, long payStartFP, long skipOffset, long lastPosBlockOffset, int singletonDocID) {
-    this.docStartFP = docStartFP;
-    this.posStartFP = posStartFP;
-    this.payStartFP = payStartFP;
-    this.skipOffset = skipOffset;
-    this.lastPosBlockOffset = lastPosBlockOffset;
-    this.singletonDocID = singletonDocID;
+    super(posStartFP != -1 ? 3 : 1, posStartFP != -1 ? 20 : 0);
+    setDocFP(docStartFP);
+    setPosFP(posStartFP);
+    setPayFP(payStartFP);
+    setSkipOffset(skipOffset);
+    setLastPosBlockOffset(lastPosBlockOffset);
+    setSingletonDocID(singletonDocID);
   }
   public PluggableMetaData() {
   }
 
+  public void setSkipOffset(long skipOffset) {
+    buffer.putLong(0, skipOffset);
+  }
+  public void setLastPosBlockOffset(long lastPosBlockOffset) {
+    buffer.putLong(8, lastPosBlockOffset);
+  }
+  public void setSingletonDocID(int singletonDocID) {
+    buffer.putInt(16, singletonDocID);
+  }
+  public void setDocFP(long docFP) {
+    base.longs[0] = docFP;
+  }
+  public void setPosFP(long posFP) {
+    base.longs[1] = posFP;
+  }
+  public void setPayFP(long payFP) {
+    base.longs[2] = payFP;
+  }
+
+  public long skipOffset() {
+    return buffer.getLong(0);
+  }
+  public long lastPosBlockOffset() {
+    return buffer.getLong(8);
+  }
+  public int singletonDocID() {
+    return buffer.getInt(16);
+  }
+  public long docFP() {
+    return base.longs[0];
+  }
+  public long posFP() {
+    return base.longs[1];
+  }
+  public long payFP() {
+    return base.longs[2];
+  }
+
+
+  /*
   public PluggableMetaData clone() {
     PluggableMetaData other = new PluggableMetaData();
     other.copyFrom(this);
@@ -65,21 +104,17 @@ final class PluggableMetaData extends TermMetaData {
 
   public void copyFrom(TermMetaData _other) {
     PluggableMetaData other = (PluggableMetaData) _other;
-    docStartFP = other.docStartFP;
-    posStartFP = other.posStartFP;
-    payStartFP = other.payStartFP;
-    lastPosBlockOffset = other.lastPosBlockOffset;
-    skipOffset = other.skipOffset;
-    singletonDocID = other.singletonDocID;
+    this.base = LongsRef.deepCopyOf(other.base);
+    this.extend = BytesRef.deepCopyOf(other.extend);
 
-    // Do not copy bytes, bytesReader (else TermMetaData is
-    // very heavy, ie drags around the entire block's
-    // byte[]).  On seek back, if next() is in fact used
-    // (rare!), they will be re-read from disk.
-  }
+    // Do not copy buffered postings bytes & bytesReader 
+    // (else TermMetaData is very heavy, ie drags around the 
+    // entire block's byte[]).  On seek back, if next() is in fact 
+    // used (rare!), they will be re-read from disk.
+  }*/
 
   @Override
   public String toString() {
-    return super.toString() + " docStartFP=" + docStartFP + " posStartFP=" + posStartFP + " payStartFP=" + payStartFP + " lastPosBlockOffset=" + lastPosBlockOffset + " singletonDocID=" + singletonDocID;
+    return super.toString() + " docStartFP=" + docFP() + " posStartFP=" + posFP() + " payStartFP=" + payFP() + " lastPosBlockOffset=" + lastPosBlockOffset() + " singletonDocID=" + singletonDocID();
   }
 }

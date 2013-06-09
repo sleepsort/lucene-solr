@@ -185,54 +185,55 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
     final DataInput in = meta.bytesReader;
     if (isFirstTerm) {
       if (state.docFreq == 1) {
-        meta.singletonDocID = in.readVInt();
-        meta.docStartFP = 0;
+        meta.setSingletonDocID(in.readVInt());
+        meta.setDocFP(0);
       } else {
-        meta.singletonDocID = -1;
-        meta.docStartFP = in.readVLong();
+        meta.setSingletonDocID(-1);
+        meta.setDocFP(in.readVLong());
       }
       if (fieldHasPositions) {
-        meta.posStartFP = in.readVLong();
+        meta.setPosFP(in.readVLong());
         if (state.totalTermFreq > BLOCK_SIZE) {
-          meta.lastPosBlockOffset = in.readVLong();
+          meta.setLastPosBlockOffset(in.readVLong());
         } else {
-          meta.lastPosBlockOffset = -1;
+          meta.setLastPosBlockOffset(-1);
         }
         if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
-          meta.payStartFP = in.readVLong();
+          meta.setPayFP(in.readVLong());
         } else {
-          meta.payStartFP = -1;
+          meta.setPayFP(-1);
         }
       }
     } else {
       if (state.docFreq == 1) {
-        meta.singletonDocID = in.readVInt();
+        meta.setSingletonDocID(in.readVInt());
       } else {
-        meta.singletonDocID = -1;
-        meta.docStartFP += in.readVLong();
+        meta.setSingletonDocID(-1);
+        meta.setDocFP(meta.docFP() + in.readVLong());
       }
       if (fieldHasPositions) {
-        meta.posStartFP += in.readVLong();
+        meta.setDocFP(meta.docFP() + in.readVLong());
+        meta.setPosFP(meta.posFP() + in.readVLong());
         if (state.totalTermFreq > BLOCK_SIZE) {
-          meta.lastPosBlockOffset = in.readVLong();
+          meta.setLastPosBlockOffset(in.readVLong());
         } else {
-          meta.lastPosBlockOffset = -1;
+          meta.setLastPosBlockOffset(-1);
         }
         if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
           long delta = in.readVLong();
           if (meta.payStartFP == -1) {
-            meta.payStartFP = delta;
+            meta.setPayFP(delta);
           } else {
-            meta.payStartFP += delta;
+            meta.setPayFP(meta.payFP() + delta);
           }
         }
       }
     }
 
     if (state.docFreq > BLOCK_SIZE) {
-      meta.skipOffset = in.readVLong();
+      meta.setSkipOffset(in.readVLong());
     } else {
-      meta.skipOffset = -1;
+      meta.setSkipOffset(-1);
     }
   }
     
@@ -355,9 +356,9 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
       // }
       docFreq = state.docFreq;
       totalTermFreq = indexHasFreq ? state.totalTermFreq : docFreq;
-      docTermStartFP = meta.docStartFP;
-      skipOffset = meta.skipOffset;
-      singletonDocID = meta.singletonDocID;
+      docTermStartFP = meta.docFP();
+      skipOffset = meta.skipOffset();
+      singletonDocID = meta.singletonDocID();
       if (docFreq > 1) {
         if (docIn == null) {
           // lazy init
@@ -652,12 +653,12 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
       //   System.out.println("  FPR.reset: state=" + state);
       // }
       docFreq = state.docFreq;
-      docTermStartFP = meta.docStartFP;
-      posTermStartFP = meta.posStartFP;
-      payTermStartFP = meta.payStartFP;
-      skipOffset = meta.skipOffset;
       totalTermFreq = state.totalTermFreq;
-      singletonDocID = meta.singletonDocID;
+      docTermStartFP = meta.docFP();
+      posTermStartFP = meta.posFP();
+      payTermStartFP = meta.payFP();
+      skipOffset = meta.skipOffset();
+      singletonDocID = meta.singletonDocID();
       if (docFreq > 1) {
         if (docIn == null) {
           // lazy init
@@ -1111,12 +1112,12 @@ public final class PluggablePostingsReader extends PluggablePostingsReaderBase {
       //   System.out.println("  FPR.reset: state=" + state);
       // }
       docFreq = state.docFreq;
-      docTermStartFP = meta.docStartFP;
-      posTermStartFP = meta.posStartFP;
-      payTermStartFP = meta.payStartFP;
-      skipOffset = meta.skipOffset;
       totalTermFreq = state.totalTermFreq;
-      singletonDocID = meta.singletonDocID;
+      docTermStartFP = meta.docFP();
+      posTermStartFP = meta.posFP();
+      payTermStartFP = meta.payFP();
+      skipOffset = meta.skipOffset();
+      singletonDocID = meta.singletonDocID();
       if (docFreq > 1) {
         if (docIn == null) {
           // lazy init

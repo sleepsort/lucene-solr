@@ -731,7 +731,7 @@ public class PluggableTermsReader extends FieldsProducer {
           state.termBlockOrd = 0;
           nextEnt = 0;
           
-          postingsReader.readTermsBlock(in, fieldInfo);
+          postingsReader.readTermsBlock(in, fieldInfo, proto);
 
           if (!isLastInFloor) {
             // Sub-blocks of a single floor block are always
@@ -2404,7 +2404,7 @@ public class PluggableTermsReader extends FieldsProducer {
 
           // TODO: we could skip this if !hasTerms; but
           // that's rare so won't help much
-          postingsReader.readTermsBlock(in, fieldInfo);
+          postingsReader.readTermsBlock(in, fieldInfo, proto);
 
           // Sub-blocks of a single floor block are always
           // written one after another -- tail recurse:

@@ -528,26 +528,26 @@ public final class PluggablePostingsWriter extends PluggablePostingsWriterBase {
       PluggableMetaData term = pendingTerms.get(idx);
 
       if (term.singletonDocID == -1) {
-        bytesWriter.writeVLong(term.docStartFP - lastDocStartFP);
-        lastDocStartFP = term.docStartFP;
+        bytesWriter.writeVLong(term.docFP() - lastDocStartFP);
+        lastDocStartFP = term.docFP();
       } else {
-        bytesWriter.writeVInt(term.singletonDocID);
+        bytesWriter.writeVInt(term.singletonDocID());
       }
 
       if (fieldHasPositions) {
-        bytesWriter.writeVLong(term.posStartFP - lastPosStartFP);
-        lastPosStartFP = term.posStartFP;
+        bytesWriter.writeVLong(term.posFP() - lastPosStartFP);
+        lastPosStartFP = term.posFP();
         if (term.lastPosBlockOffset != -1) {
-          bytesWriter.writeVLong(term.lastPosBlockOffset);
+          bytesWriter.writeVLong(term.lastPosBlockOffset());
         }
-        if ((fieldHasPayloads || fieldHasOffsets) && term.payStartFP != -1) {
-          bytesWriter.writeVLong(term.payStartFP - lastPayStartFP);
-          lastPayStartFP = term.payStartFP;
+        if ((fieldHasPayloads || fieldHasOffsets) && term.payFP() != -1) {
+          bytesWriter.writeVLong(term.payFP() - lastPayStartFP);
+          lastPayStartFP = term.payFP();
         }
       }
 
-      if (term.skipOffset != -1) {
-        bytesWriter.writeVLong(term.skipOffset);
+      if (term.skipOffset() != -1) {
+        bytesWriter.writeVLong(term.skipOffset());
       }
     }
 
