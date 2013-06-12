@@ -18,19 +18,21 @@ final class Lucene40MetaData extends TermMetaData {
   byte[] bytes;
 
   public Lucene40MetaData(long freqOffset, long skipOffset, long proxOffset) {
-    super(proxOffset != -1 ? 2 : 1, 8);
+    //super(proxOffset != -1 ? 2 : 1, 8);
+    super(2, 8);
     setFreqOffset(freqOffset);
     setProxOffset(proxOffset);
     setSkipOffset(skipOffset);
   }
   public Lucene40MetaData(FieldInfo info) {
+    super(2, 8);
   }
 
   public void setFreqOffset(long freqOffset) {
     base.longs[0] = freqOffset;
   }
   public void setProxOffset(long proxOffset) {
-    base.longs[2] = proxOffset;
+    base.longs[1] = proxOffset;
   }
   public void setSkipOffset(long skipOffset) {
     buffer.putLong(0, skipOffset);
