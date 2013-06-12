@@ -5,7 +5,6 @@ import java.util.Arrays;
 
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.TermMetaData;
-import org.apache.lucene.codecs.TermProtoData;
 import org.apache.lucene.index.TermState;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.store.ByteArrayDataInput;
@@ -24,7 +23,38 @@ final class SepMetaData extends TermMetaData {
   byte[] bytes;
   ByteArrayDataInput bytesReader;
 
-  public SepMetaData(FieldInfo info) {
-    throw new IllegalStateException("not implemented");
+  public SepMetaData() {
+  }
+  public SepMetaData clone() {
+    SepMetaData other = new SepMetaData();
+    other.copyFrom(this);
+    return other;
+  }
+  public void copyFrom(SepMetaData other) {
+    if (docIndex == null) {
+      docIndex = other.docIndex.clone();
+    } else {
+      docIndex.copyFrom(other.docIndex);
+    }
+    if (other.freqIndex != null) {
+      if (freqIndex == null) {
+        freqIndex = other.freqIndex.clone();
+      } else {
+        freqIndex.copyFrom(other.freqIndex);
+      }
+    } else {
+      freqIndex = null;
+    }
+    if (other.posIndex != null) {
+      if (posIndex == null) {
+        posIndex = other.posIndex.clone();
+      } else {
+        posIndex.copyFrom(other.posIndex);
+      }
+    } else {
+      posIndex = null;
+    }
+    payloadFP = other.payloadFP;
+    skipFP = other.skipFP;
   }
 }

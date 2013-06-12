@@ -24,13 +24,12 @@ import java.util.Map;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.PostingsReaderBase;
-import org.apache.lucene.codecs.TermProtoData;
-import org.apache.lucene.codecs.TermMetaData;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.codecs.TermMetaData;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.ArrayUtil;
@@ -66,63 +65,10 @@ public class PulsingPostingsReader extends PostingsReaderBase {
     wrappedPostingsReader.init(termsIn);
   }
 
-  private static class PulsingTermState extends BlockTermState {
-    private byte[] postings;
-    private int postingsSize;                     // -1 if this term was not inlined
-    private BlockTermState wrappedTermState;
-
-    ByteArrayDataInput inlinedBytesReader;
-    private byte[] inlinedBytes;
-
-    @Override
-    public PulsingTermState clone() {
-      PulsingTermState clone;
-      clone = (PulsingTermState) super.clone();
-      if (postingsSize != -1) {
-        clone.postings = new byte[postingsSize];
-        System.arraycopy(postings, 0, clone.postings, 0, postingsSize);
-      } else {
-        assert wrappedTermState != null;
-        clone.wrappedTermState = (BlockTermState) wrappedTermState.clone();
-      }
-      return clone;
-    }
-
-    @Override
-    public void copyFrom(TermState _other) {
-      super.copyFrom(_other);
-      PulsingTermState other = (PulsingTermState) _other;
-      postingsSize = other.postingsSize;
-      if (other.postingsSize != -1) {
-        if (postings == null || postings.length < other.postingsSize) {
-          postings = new byte[ArrayUtil.oversize(other.postingsSize, 1)];
-        }
-        System.arraycopy(other.postings, 0, postings, 0, other.postingsSize);
-      } else {
-        wrappedTermState.copyFrom(other.wrappedTermState);
-      }
-
-      // NOTE: we do not copy the
-      // inlinedBytes/inlinedBytesReader; these are only
-      // stored on the "primary" TermState.  They are
-      // "transient" to cloned term states.
-    }
-
-    @Override
-    public String toString() {
-      if (postingsSize == -1) {
-        return "PulsingTermState: not inlined: wrapped=" + wrappedTermState;
-      } else {
-        return "PulsingTermState: inlined size=" + postingsSize + " " + super.toString();
-      }
-    }
-  }
-
   @Override
-  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, TermProtoData proto) throws IOException {
-    //System.out.println("PR.readTermsBlock proto=" + proto);
-    final BlockTermState state = proto.state;
-    final PulsingMetaData meta = (PulsingMetaData) proto.meta;
+  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, BlockTermState termState) throws IOException {
+    //System.out.println("PR.readTermsBlock state=" + _termState);
+    final PulsingMetaData meta = (PulsingMetaData) termState.meta;
     if (meta.inlinedBytes == null) {
       meta.inlinedBytes = new byte[128];
       meta.inlinedBytesReader = new ByteArrayDataInput();
@@ -134,23 +80,23 @@ public class PulsingPostingsReader extends PostingsReaderBase {
     }
     termsIn.readBytes(meta.inlinedBytes, 0, len);
     meta.inlinedBytesReader.reset(meta.inlinedBytes);
-    state.termBlockOrd = 0;
-    wrappedPostingsReader.readTermsBlock(termsIn, fieldInfo, new TermProtoData(state, meta.wrapped));
+    meta.wrapped.termBlockOrd = 0;
+    wrappedPostingsReader.readTermsBlock(termsIn, fieldInfo, meta.wrapped);
   }
 
   @Override
   public TermMetaData newMetaData(FieldInfo info) throws IOException {
-    return new PulsingMetaData(info);
+    TermMetaData wrapped = wrappedPostingsReader.newMetaData(info);
+    return new PulsingMetaData(wrapped);
   }
 
   @Override
-  public void nextTerm(FieldInfo fieldInfo, TermProtoData proto) throws IOException {
+  public void nextTerm(FieldInfo fieldInfo, BlockTermState termState) throws IOException {
     //System.out.println("PR nextTerm");
-    BlockTermState state = (PulsingTermState) proto.state;
-    PulsingMetaData meta = (PulsingMetaData) proto.meta;
+    PulsingMetaData meta = (PulsingMetaData) termState.meta;
 
     // if we have positions, its total TF, otherwise its computed based on docFreq.
-    long count = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0 ? state.totalTermFreq : state.docFreq;
+    long count = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0 ? termState.totalTermFreq : termState.docFreq;
     //System.out.println("  count=" + count + " threshold=" + maxPositions);
 
     if (count <= maxPositions) {
@@ -172,15 +118,16 @@ public class PulsingPostingsReader extends PostingsReaderBase {
       //System.out.println("  not inlined");
       meta.postingsSize = -1;
       // TODO: should we do full copyFrom?  much heavier...?
-      wrappedPostingsReader.nextTerm(fieldInfo, new TermProtoData(state, meta.wrapped));
-      state.termBlockOrd++;
+      meta.wrapped.docFreq = termState.docFreq;
+      meta.wrapped.totalTermFreq = termState.totalTermFreq;
+      wrappedPostingsReader.nextTerm(fieldInfo, meta.wrapped);
+      meta.wrapped.termBlockOrd++;
     }
   }
 
   @Override
-  public DocsEnum docs(FieldInfo field, TermProtoData proto, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
-    BlockTermState state = (PulsingTermState) proto.state;
-    PulsingMetaData meta = (PulsingMetaData) proto.meta;
+  public DocsEnum docs(FieldInfo field, BlockTermState termState, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
+    PulsingMetaData meta = (PulsingMetaData) termState.meta;
     if (meta.postingsSize != -1) {
       PulsingDocsEnum postings;
       if (reuse instanceof PulsingDocsEnum) {
@@ -200,24 +147,23 @@ public class PulsingPostingsReader extends PostingsReaderBase {
       if (reuse != postings) {
         setOther(postings, reuse); // postings.other = reuse
       }
-      return postings.reset(liveDocs, new TermProtoData(state, meta.wrapped));
+      return postings.reset(liveDocs, termState);
     } else {
       if (reuse instanceof PulsingDocsEnum) {
-        DocsEnum wrapped = wrappedPostingsReader.docs(field, new TermProtoData(state, meta.wrapped), liveDocs, getOther(reuse), flags);
+        DocsEnum wrapped = wrappedPostingsReader.docs(field, meta.wrapped, liveDocs, getOther(reuse), flags);
         setOther(wrapped, reuse); // wrapped.other = reuse
         return wrapped;
       } else {
-        return wrappedPostingsReader.docs(field, new TermProtoData(state, meta.wrapped), liveDocs, reuse, flags);
+        return wrappedPostingsReader.docs(field, meta.wrapped, liveDocs, reuse, flags);
       }
     }
   }
 
   @Override
-  public DocsAndPositionsEnum docsAndPositions(FieldInfo field, TermProtoData proto, Bits liveDocs, DocsAndPositionsEnum reuse,
+  public DocsAndPositionsEnum docsAndPositions(FieldInfo field, BlockTermState termState, Bits liveDocs, DocsAndPositionsEnum reuse,
                                                int flags) throws IOException {
 
-    BlockTermState state = (PulsingTermState) proto.state;
-    PulsingMetaData meta = (PulsingMetaData) proto.meta;
+    final PulsingMetaData meta = (PulsingMetaData) termState.meta;
 
     if (meta.postingsSize != -1) {
       PulsingDocsAndPositionsEnum postings;
@@ -238,15 +184,15 @@ public class PulsingPostingsReader extends PostingsReaderBase {
       if (reuse != postings) {
         setOther(postings, reuse); // postings.other = reuse 
       }
-      return postings.reset(liveDocs, proto);
+      return postings.reset(liveDocs, termState);
     } else {
       if (reuse instanceof PulsingDocsAndPositionsEnum) {
-        DocsAndPositionsEnum wrapped = wrappedPostingsReader.docsAndPositions(field, new TermProtoData(state, meta.wrapped), liveDocs, (DocsAndPositionsEnum) getOther(reuse),
+        DocsAndPositionsEnum wrapped = wrappedPostingsReader.docsAndPositions(field, meta.wrapped, liveDocs, (DocsAndPositionsEnum) getOther(reuse),
                                                                               flags);
         setOther(wrapped, reuse); // wrapped.other = reuse
         return wrapped;
       } else {
-        return wrappedPostingsReader.docsAndPositions(field, new TermProtoData(state, meta.wrapped), liveDocs, reuse, flags);
+        return wrappedPostingsReader.docsAndPositions(field, meta.wrapped, liveDocs, reuse, flags);
       }
     }
   }
@@ -270,10 +216,9 @@ public class PulsingPostingsReader extends PostingsReaderBase {
       storeOffsets = indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
     }
 
-    public PulsingDocsEnum reset(Bits liveDocs, TermProtoData proto) {
-      BlockTermState state = (PulsingTermState) proto.state;
-      PulsingMetaData meta = (PulsingMetaData) proto.meta;
-      //System.out.println("PR docsEnum state=" + state+ " docFreq=" + state.docFreq);
+    public PulsingDocsEnum reset(Bits liveDocs, BlockTermState termState) {
+      //System.out.println("PR docsEnum termState=" + termState + " docFreq=" + termState.docFreq);
+      PulsingMetaData meta = (PulsingMetaData)termState.meta;
       assert meta.postingsSize != -1;
 
       // Must make a copy of meta's byte[] so that if
@@ -288,7 +233,7 @@ public class PulsingPostingsReader extends PostingsReaderBase {
       docID = -1;
       accum = 0;
       freq = 1;
-      cost = state.docFreq;
+      cost = termState.docFreq;
       payloadLength = 0;
       this.liveDocs = liveDocs;
       return this;
@@ -408,9 +353,8 @@ public class PulsingPostingsReader extends PostingsReaderBase {
       return indexOptions == fieldInfo.getIndexOptions() && storePayloads == fieldInfo.hasPayloads();
     }
 
-    public PulsingDocsAndPositionsEnum reset(Bits liveDocs, TermProtoData proto) {
-      BlockTermState state = (PulsingTermState) proto.state;
-      PulsingMetaData meta = (PulsingMetaData) proto.meta;
+    public PulsingDocsAndPositionsEnum reset(Bits liveDocs, BlockTermState termState) {
+      PulsingMetaData meta = (PulsingMetaData) termState.meta;
       assert meta.postingsSize != -1;
       if (postingsBytes == null) {
         postingsBytes = new byte[meta.postingsSize];
@@ -424,7 +368,7 @@ public class PulsingPostingsReader extends PostingsReaderBase {
       posPending = 0;
       docID = -1;
       accum = 0;
-      cost = state.docFreq;
+      cost = termState.docFreq;
       startOffset = storeOffsets ? 0 : -1; // always return -1 if no offsets are stored
       offsetLength = 0;
       //System.out.println("PR d&p reset storesPayloads=" + storePayloads + " bytes=" + bytes.length + " this=" + this);

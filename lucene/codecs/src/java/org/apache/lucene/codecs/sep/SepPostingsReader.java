@@ -23,7 +23,6 @@ import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.PostingsReaderBase;
 import org.apache.lucene.codecs.TermMetaData;
-import org.apache.lucene.codecs.TermProtoData;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
@@ -107,13 +106,23 @@ public class SepPostingsReader extends PostingsReaderBase {
     IOUtils.close(freqIn, docIn, skipIn, posIn, payloadIn);
   }
 
-  public TermMetaData newMetaData(FieldInfo info) {
-    return new SepMetaData(info);
+
+  @Override
+  public TermMetaData newMetaData(FieldInfo info) throws IOException {
+    final SepMetaData meta = new SepMetaData();
+    meta.docIndex = docIn.index();
+    if (freqIn != null) {
+      meta.freqIndex = freqIn.index();
+    }
+    if (posIn != null) {
+      meta.posIndex = posIn.index();
+    }
+    return meta;
   }
 
   @Override
-  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, TermProtoData proto) throws IOException {
-    final SepMetaData meta = (SepMetaData)proto.meta;
+  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, BlockTermState termState) throws IOException {
+    final SepMetaData meta = (SepMetaData) termState.meta;
     //System.out.println("SEPR: readTermsBlock termsIn.fp=" + termsIn.getFilePointer());
     final int len = termsIn.readVInt();
     //System.out.println("  numBytes=" + len);
@@ -128,12 +137,11 @@ public class SepPostingsReader extends PostingsReaderBase {
   }
 
   @Override
-  public void nextTerm(FieldInfo fieldInfo, TermProtoData proto) throws IOException {
-    final SepMetaData meta = (SepMetaData)proto.meta;
-    final BlockTermState state = proto.state;
-    final boolean isFirstTerm = state.termBlockOrd == 0;
-    //System.out.println("SEPR.nextTerm termCount=" + state.termBlockOrd + " isFirstTerm=" + isFirstTerm + " bytesReader.pos=" + meta.bytesReader.getPosition());
-    //System.out.println("  docFreq=" + state.docFreq);
+  public void nextTerm(FieldInfo fieldInfo, BlockTermState termState) throws IOException {
+    final SepMetaData meta = (SepMetaData) termState.meta;
+    final boolean isFirstTerm = termState.termBlockOrd == 0;
+    //System.out.println("SEPR.nextTerm termCount=" + termState.termBlockOrd + " isFirstTerm=" + isFirstTerm + " bytesReader.pos=" + meta.bytesReader.getPosition());
+    //System.out.println("  docFreq=" + termState.docFreq);
     meta.docIndex.read(meta.bytesReader, isFirstTerm);
     //System.out.println("  docIndex=" + meta.docIndex);
     if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
@@ -153,7 +161,7 @@ public class SepPostingsReader extends PostingsReaderBase {
       }
     }
 
-    if (state.docFreq >= skipMinimum) {
+    if (termState.docFreq >= skipMinimum) {
       //System.out.println("   readSkip @ " + meta.bytesReader.getPosition());
       if (isFirstTerm) {
         meta.skipFP = meta.bytesReader.readVLong();
@@ -167,7 +175,7 @@ public class SepPostingsReader extends PostingsReaderBase {
   }
 
   @Override
-  public DocsEnum docs(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
+  public DocsEnum docs(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
     SepDocsEnum docsEnum;
     if (reuse == null || !(reuse instanceof SepDocsEnum)) {
       docsEnum = new SepDocsEnum();
@@ -181,11 +189,11 @@ public class SepPostingsReader extends PostingsReaderBase {
       }
     }
 
-    return docsEnum.init(fieldInfo, proto, liveDocs);
+    return docsEnum.init(fieldInfo, termState, liveDocs);
   }
 
   @Override
-  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs,
+  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs,
                                                DocsAndPositionsEnum reuse, int flags)
     throws IOException {
 
@@ -203,7 +211,7 @@ public class SepPostingsReader extends PostingsReaderBase {
       }
     }
 
-    return postingsEnum.init(fieldInfo, proto, liveDocs);
+    return postingsEnum.init(fieldInfo, termState, liveDocs);
   }
 
   class SepDocsEnum extends DocsEnum {
@@ -251,9 +259,8 @@ public class SepPostingsReader extends PostingsReaderBase {
       }
     }
 
-    SepDocsEnum init(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs) throws IOException {
-      final SepMetaData meta = (SepMetaData)proto.meta;
-      final BlockTermState state = proto.state;
+    SepDocsEnum init(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs) throws IOException {
+      SepMetaData meta = (SepMetaData) termState.meta;
       this.liveDocs = liveDocs;
       this.indexOptions = fieldInfo.getIndexOptions();
       omitTF = indexOptions == IndexOptions.DOCS_ONLY;
@@ -269,7 +276,7 @@ public class SepPostingsReader extends PostingsReaderBase {
         freqIndex.seek(freqReader);
       }
 
-      docFreq = state.docFreq;
+      docFreq = termState.docFreq;
       // NOTE: unused if docFreq < skipMinimum:
       skipFP = meta.skipFP;
       count = 0;
@@ -423,9 +430,8 @@ public class SepPostingsReader extends PostingsReaderBase {
       payloadIn = SepPostingsReader.this.payloadIn.clone();
     }
 
-    SepDocsAndPositionsEnum init(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs) throws IOException {
-      final SepMetaData meta = (SepMetaData)proto.meta;
-      final BlockTermState state = proto.state;
+    SepDocsAndPositionsEnum init(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs) throws IOException {
+      SepMetaData meta = (SepMetaData) termState.meta;
       this.liveDocs = liveDocs;
       storePayloads = fieldInfo.hasPayloads();
       //System.out.println("Sep D&P init");
@@ -449,7 +455,7 @@ public class SepPostingsReader extends PostingsReaderBase {
       skipFP = meta.skipFP;
       //System.out.println("  skipFP=" + skipFP);
 
-      docFreq = state.docFreq;
+      docFreq = termState.docFreq;
       count = 0;
       doc = -1;
       accum = 0;

@@ -37,6 +37,8 @@ public class BlockTermState extends OrdTermState {
   // TODO: only used in BlockTermDict
   public long blockFilePointer;
 
+  public TermMetaData meta;
+
   /** Sole constructor. (For invocation by subclass 
    *  constructors, typically implicit.) */
   public BlockTermState() {

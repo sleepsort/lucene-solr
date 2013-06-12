@@ -9,7 +9,6 @@ import java.util.Arrays;
 
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.TermMetaData;
-import org.apache.lucene.codecs.TermProtoData;
 import org.apache.lucene.index.TermState;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfo.IndexOptions;

@@ -24,8 +24,6 @@ import java.util.Iterator;
 import java.util.TreeMap;
 
 import org.apache.lucene.codecs.BlockTermState;
-import org.apache.lucene.codecs.TermProtoData;
-import org.apache.lucene.codecs.TermMetaData;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.PostingsReaderBase;
@@ -72,7 +70,7 @@ public class BlockTermsReader extends FieldsProducer {
   private final TreeMap<String,FieldReader> fields = new TreeMap<String,FieldReader>();
 
   // Caches the most recently looked-up field + terms:
-  private final DoubleBarrelLRUCache<FieldAndTerm,TermProtoData> termsCache;
+  private final DoubleBarrelLRUCache<FieldAndTerm,BlockTermState> termsCache;
 
   // Reads the terms index
   private TermsIndexReaderBase indexReader;
@@ -119,7 +117,7 @@ public class BlockTermsReader extends FieldsProducer {
     throws IOException {
     
     this.postingsReader = postingsReader;
-    termsCache = new DoubleBarrelLRUCache<FieldAndTerm,TermProtoData>(termsCacheSize);
+    termsCache = new DoubleBarrelLRUCache<FieldAndTerm,BlockTermState>(termsCacheSize);
 
     // this.segment = segment;
     in = dir.openInput(IndexFileNames.segmentFileName(info.name, segmentSuffix, BlockTermsWriter.TERMS_EXTENSION),
@@ -295,8 +293,7 @@ public class BlockTermsReader extends FieldsProducer {
     // Iterates through terms in this field
     private final class SegmentTermsEnum extends TermsEnum {
       private final IndexInput in;
-      private final TermProtoData proto;
-      private final BlockTermState state; // nested
+      private final BlockTermState state;
       private final boolean doOrd;
       private final FieldAndTerm fieldTerm = new FieldAndTerm();
       private final TermsIndexReaderBase.FieldIndexEnum indexEnum;
@@ -345,7 +342,7 @@ public class BlockTermsReader extends FieldsProducer {
         doOrd = indexReader.supportsOrd();
         fieldTerm.field = fieldInfo.name;
         state = new BlockTermState();
-        proto = new TermProtoData(state, postingsReader.newMetaData(fieldInfo));
+        state.meta = postingsReader.newMetaData(fieldInfo);
         state.totalTermFreq = -1;
         state.ord = -1;
 
@@ -388,8 +385,7 @@ public class BlockTermsReader extends FieldsProducer {
           // TermState (ie one that was cloned and
           // cached/returned by termState()) from the
           // malleable (primary) one?
-          final TermProtoData cachedProto = termsCache.get(fieldTerm);
-          final TermState cachedState = cachedProto.state;
+          final TermState cachedState = termsCache.get(fieldTerm);
           if (cachedState != null) {
             seekPending = true;
             //System.out.println("  cached!");
@@ -584,7 +580,7 @@ public class BlockTermsReader extends FieldsProducer {
                   // Store in cache
                   decodeMetaData();
                   //System.out.println("  cache! state=" + state);
-                  termsCache.put(new FieldAndTerm(fieldTerm), proto.clone());
+                  termsCache.put(new FieldAndTerm(fieldTerm), (BlockTermState) state.clone());
                 }
 
                 return SeekStatus.FOUND;
@@ -709,7 +705,7 @@ public class BlockTermsReader extends FieldsProducer {
         //System.out.println("BTR.docs this=" + this);
         decodeMetaData();
         //System.out.println("BTR.docs:  state.docFreq=" + state.docFreq);
-        return postingsReader.docs(fieldInfo, proto, liveDocs, reuse, flags);
+        return postingsReader.docs(fieldInfo, state, liveDocs, reuse, flags);
       }
 
       @Override
@@ -720,7 +716,7 @@ public class BlockTermsReader extends FieldsProducer {
         }
 
         decodeMetaData();
-        return postingsReader.docsAndPositions(fieldInfo, proto, liveDocs, reuse, flags);
+        return postingsReader.docsAndPositions(fieldInfo, state, liveDocs, reuse, flags);
       }
 
       @Override
@@ -834,7 +830,7 @@ public class BlockTermsReader extends FieldsProducer {
 
         state.termBlockOrd = 0;
 
-        postingsReader.readTermsBlock(in, fieldInfo, proto);
+        postingsReader.readTermsBlock(in, fieldInfo, state);
 
         blocksSinceSeek++;
         indexIsCurrent = indexIsCurrent && (blocksSinceSeek < indexReader.getDivisor());
@@ -874,7 +870,7 @@ public class BlockTermsReader extends FieldsProducer {
               //System.out.println("    totTF=" + state.totalTermFreq);
             }
 
-            postingsReader.nextTerm(fieldInfo, proto);
+            postingsReader.nextTerm(fieldInfo, state);
             metaDataUpto++;
             state.termBlockOrd++;
           }

@@ -30,7 +30,7 @@ public class TermMetaData {
   // for base part.
   //
   // However, this property is not guraranteed for all intermediate
-  // outputs in a FST, e.g. a TermProtoData shared by two arcs might
+  // outputs in a FST, e.g. a TermMetaData shared by two arcs might
   // get a 'skewed' output, which is not possible to be compared with others
   // Therefore during building phase, we have to iterate each long value 
   // to see whether the 'comparable' property still holds.

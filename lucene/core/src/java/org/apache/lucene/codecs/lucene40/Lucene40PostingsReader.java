@@ -24,7 +24,6 @@ import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.PostingsReaderBase;
 import org.apache.lucene.codecs.TermMetaData;
-import org.apache.lucene.codecs.TermProtoData;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
@@ -138,8 +137,8 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
   /* Reads but does not decode the byte[] blob holding
      metadata for the current terms block */
   @Override
-  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, TermProtoData proto) throws IOException {
-    final Lucene40MetaData meta= (Lucene40MetaData)proto.meta;
+  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, BlockTermState state) throws IOException {
+    final Lucene40MetaData meta= (Lucene40MetaData) state.meta;
 
     final int len = termsIn.readVInt();
 
@@ -156,10 +155,9 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
   }
 
   @Override
-  public void nextTerm(FieldInfo fieldInfo, TermProtoData proto)
+  public void nextTerm(FieldInfo fieldInfo, BlockTermState state)
     throws IOException {
-    final BlockTermState state = proto.state;
-    final Lucene40MetaData meta= (Lucene40MetaData)proto.meta;
+    final Lucene40MetaData meta= (Lucene40MetaData) state.meta;
     // if (DEBUG) System.out.println("SPR: nextTerm seg=" + segment + " tbOrd=" + state.termBlockOrd + " bytesReader.fp=" + meta.bytesReader.getPosition());
     final boolean isFirstTerm = state.termBlockOrd == 0;
 
@@ -195,12 +193,12 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
   }
     
   @Override
-  public DocsEnum docs(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
+  public DocsEnum docs(FieldInfo fieldInfo, BlockTermState state, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
     if (canReuse(reuse, liveDocs)) {
-      // if (DEBUG) System.out.println("SPR.docs ts=" + proto);
-      return ((SegmentDocsEnumBase) reuse).reset(fieldInfo, proto);
+      // if (DEBUG) System.out.println("SPR.docs ts=" + state);
+      return ((SegmentDocsEnumBase) reuse).reset(fieldInfo, state);
     }
-    return newDocsEnum(liveDocs, fieldInfo, proto);
+    return newDocsEnum(liveDocs, fieldInfo, state);
   }
   
   private boolean canReuse(DocsEnum reuse, Bits liveDocs) {
@@ -217,16 +215,16 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
     return false;
   }
   
-  private DocsEnum newDocsEnum(Bits liveDocs, FieldInfo fieldInfo, TermProtoData proto) throws IOException {
+  private DocsEnum newDocsEnum(Bits liveDocs, FieldInfo fieldInfo, BlockTermState state) throws IOException {
     if (liveDocs == null) {
-      return new AllDocsSegmentDocsEnum(freqIn).reset(fieldInfo, proto);
+      return new AllDocsSegmentDocsEnum(freqIn).reset(fieldInfo, state);
     } else {
-      return new LiveDocsSegmentDocsEnum(freqIn, liveDocs).reset(fieldInfo, proto);
+      return new LiveDocsSegmentDocsEnum(freqIn, liveDocs).reset(fieldInfo, state);
     }
   }
 
   @Override
-  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs,
+  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, BlockTermState state, Bits liveDocs,
                                                DocsAndPositionsEnum reuse, int flags)
     throws IOException {
 
@@ -249,7 +247,7 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
           docsEnum = new SegmentFullPositionsEnum(freqIn, proxIn);
         }
       }
-      return docsEnum.reset(fieldInfo, proto, liveDocs);
+      return docsEnum.reset(fieldInfo, state, liveDocs);
     } else {
       SegmentDocsAndPositionsEnum docsEnum;
       if (reuse == null || !(reuse instanceof SegmentDocsAndPositionsEnum)) {
@@ -263,7 +261,7 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
           docsEnum = new SegmentDocsAndPositionsEnum(freqIn, proxIn);
         }
       }
-      return docsEnum.reset(fieldInfo, proto, liveDocs);
+      return docsEnum.reset(fieldInfo, state, liveDocs);
     }
   }
 
@@ -307,8 +305,8 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
     }
     
     
-    DocsEnum reset(FieldInfo fieldInfo, TermProtoData proto) throws IOException {
-      Lucene40MetaData meta = (Lucene40MetaData)proto.meta;
+    DocsEnum reset(FieldInfo fieldInfo, BlockTermState state) throws IOException {
+      Lucene40MetaData meta = (Lucene40MetaData) state.meta;
       indexOmitsTF = fieldInfo.getIndexOptions() == IndexOptions.DOCS_ONLY;
       storePayloads = fieldInfo.hasPayloads();
       storeOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
@@ -319,7 +317,7 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
       // seek is unnecessary; maybe we can avoid in such
       // cases
       freqIn.seek(freqOffset);
-      limit = proto.state.docFreq;
+      limit = state.docFreq;
       assert limit > 0;
       ord = 0;
       doc = -1;
@@ -691,9 +689,8 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
       this.proxIn = proxIn.clone();
     }
 
-    public SegmentDocsAndPositionsEnum reset(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs) throws IOException {
-      final BlockTermState state = proto.state;
-      final Lucene40MetaData meta = (Lucene40MetaData) proto.meta;
+    public SegmentDocsAndPositionsEnum reset(FieldInfo fieldInfo, BlockTermState state, Bits liveDocs) throws IOException {
+      final Lucene40MetaData meta = (Lucene40MetaData) state.meta;
       assert fieldInfo.getIndexOptions() == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS;
       assert !fieldInfo.hasPayloads();
 
@@ -906,9 +903,8 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
       this.proxIn = proxIn.clone();
     }
 
-    public SegmentFullPositionsEnum reset(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs) throws IOException {
-      final BlockTermState state = proto.state;
-      final Lucene40MetaData meta = (Lucene40MetaData) proto.meta;
+    public SegmentFullPositionsEnum reset(FieldInfo fieldInfo, BlockTermState state, Bits liveDocs) throws IOException {
+      final Lucene40MetaData meta = (Lucene40MetaData) state.meta;
       storeOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
       storePayloads = fieldInfo.hasPayloads();
       assert fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;

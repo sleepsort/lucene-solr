@@ -28,7 +28,6 @@ import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.PostingsReaderBase;
 import org.apache.lucene.codecs.TermMetaData;
-import org.apache.lucene.codecs.TermProtoData;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfo;
@@ -156,8 +155,8 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   /* Reads but does not decode the byte[] blob holding
      metadata for the current terms block */
   @Override
-  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, TermProtoData proto) throws IOException {
-    final Lucene41MetaData meta= (Lucene41MetaData)proto.meta;
+  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, BlockTermState state) throws IOException {
+    final Lucene41MetaData meta= (Lucene41MetaData) state.meta;
 
     final int numBytes = termsIn.readVInt();
 
@@ -173,10 +172,9 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   }
 
   @Override
-  public void nextTerm(FieldInfo fieldInfo, TermProtoData proto)
+  public void nextTerm(FieldInfo fieldInfo, BlockTermState state)
     throws IOException {
-    final BlockTermState state = proto.state;
-    final Lucene41MetaData meta= (Lucene41MetaData)proto.meta;
+    final Lucene41MetaData meta= (Lucene41MetaData) state.meta;
     final boolean isFirstTerm = state.termBlockOrd == 0;
     final boolean fieldHasPositions = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
     final boolean fieldHasOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
@@ -237,7 +235,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   }
     
   @Override
-  public DocsEnum docs(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
+  public DocsEnum docs(FieldInfo fieldInfo, BlockTermState state, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
     BlockDocsEnum docsEnum;
     if (reuse instanceof BlockDocsEnum) {
       docsEnum = (BlockDocsEnum) reuse;
@@ -247,13 +245,13 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
     } else {
       docsEnum = new BlockDocsEnum(fieldInfo);
     }
-    return docsEnum.reset(liveDocs, proto, flags);
+    return docsEnum.reset(liveDocs, state, flags);
   }
 
   // TODO: specialize to liveDocs vs not
   
   @Override
-  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TermProtoData proto, Bits liveDocs,
+  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, BlockTermState state, Bits liveDocs,
                                                DocsAndPositionsEnum reuse, int flags)
     throws IOException {
 
@@ -271,7 +269,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
       } else {
         docsAndPositionsEnum = new BlockDocsAndPositionsEnum(fieldInfo);
       }
-      return docsAndPositionsEnum.reset(liveDocs, proto);
+      return docsAndPositionsEnum.reset(liveDocs, state);
     } else {
       EverythingEnum everythingEnum;
       if (reuse instanceof EverythingEnum) {
@@ -282,7 +280,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
       } else {
         everythingEnum = new EverythingEnum(fieldInfo);
       }
-      return everythingEnum.reset(liveDocs, proto, flags);
+      return everythingEnum.reset(liveDocs, state, flags);
     }
   }
 
@@ -346,9 +344,8 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
         indexHasPayloads == fieldInfo.hasPayloads();
     }
     
-    public DocsEnum reset(Bits liveDocs, TermProtoData proto, int flags) throws IOException {
-      final BlockTermState state = proto.state;
-      final Lucene41MetaData meta = (Lucene41MetaData) proto.meta;
+    public DocsEnum reset(Bits liveDocs, BlockTermState state, int flags) throws IOException {
+      final Lucene41MetaData meta = (Lucene41MetaData) state.meta;
       this.liveDocs = liveDocs;
       // if (DEBUG) {
       //   System.out.println("  FPR.reset: state=" + state);
@@ -644,9 +641,8 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
         indexHasPayloads == fieldInfo.hasPayloads();
     }
     
-    public DocsAndPositionsEnum reset(Bits liveDocs, TermProtoData proto) throws IOException {
-      final BlockTermState state = proto.state;
-      final Lucene41MetaData meta = (Lucene41MetaData) proto.meta;
+    public DocsAndPositionsEnum reset(Bits liveDocs, BlockTermState state) throws IOException {
+      final Lucene41MetaData meta = (Lucene41MetaData) state.meta;
       this.liveDocs = liveDocs;
       // if (DEBUG) {
       //   System.out.println("  FPR.reset: state=" + state);
@@ -1103,9 +1099,8 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
         indexHasPayloads == fieldInfo.hasPayloads();
     }
     
-    public EverythingEnum reset(Bits liveDocs, TermProtoData proto, int flags) throws IOException {
-      final BlockTermState state = proto.state;
-      final Lucene41MetaData meta = (Lucene41MetaData) proto.meta;
+    public EverythingEnum reset(Bits liveDocs, BlockTermState state, int flags) throws IOException {
+      final Lucene41MetaData meta = (Lucene41MetaData) state.meta;
       this.liveDocs = liveDocs;
       // if (DEBUG) {
       //   System.out.println("  FPR.reset: state=" + state);
