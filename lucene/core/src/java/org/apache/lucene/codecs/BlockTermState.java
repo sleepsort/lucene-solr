@@ -53,6 +53,7 @@ public class BlockTermState extends OrdTermState {
     totalTermFreq = other.totalTermFreq;
     termBlockOrd = other.termBlockOrd;
     blockFilePointer = other.blockFilePointer;
+    meta = other.meta;
 
     // NOTE: don't copy blockTermCount;
     // it's "transient": used only by the "primary"

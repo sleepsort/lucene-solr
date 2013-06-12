@@ -34,6 +34,8 @@ final class Lucene41MetaData extends TermMetaData {
       setLastPosBlockOffset(lastPosBlockOffset);
     //}
   }
+  public Lucene41MetaData() {
+  }
   public Lucene41MetaData(FieldInfo info) {
     this(info.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0);
   }
@@ -80,24 +82,12 @@ final class Lucene41MetaData extends TermMetaData {
     return base.longs[2];
   }
 
-
-  /*
   public Lucene41MetaData clone() {
-    Lucene41MetaData other = new Lucene41MetaData();
-    other.copyFrom(this);
-    return other;
+    Lucene41MetaData meta = new Lucene41MetaData();
+    meta.base = this.base;
+    meta.extend = this.extend;
+    return meta;
   }
-
-  public void copyFrom(TermMetaData _other) {
-    Lucene41MetaData other = (Lucene41MetaData) _other;
-    this.base = LongsRef.deepCopyOf(other.base);
-    this.extend = BytesRef.deepCopyOf(other.extend);
-
-    // Do not copy buffered postings bytes & bytesReader 
-    // (else TermMetaData is very heavy, ie drags around the 
-    // entire block's byte[]).  On seek back, if next() is in fact 
-    // used (rare!), they will be re-read from disk.
-  }*/
 
   @Override
   public String toString() {

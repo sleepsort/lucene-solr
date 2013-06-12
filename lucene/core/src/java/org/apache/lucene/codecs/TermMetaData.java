@@ -10,7 +10,7 @@ import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LongsRef;
 
-public class TermMetaData {
+public class TermMetaData implements Cloneable{
   // It consists of two parts:
   //
   // The base part: 
@@ -37,8 +37,8 @@ public class TermMetaData {
   //
   // NOTE: only use signed part of long value, which is 63 bits
   //
-  public final LongsRef base;
-  public final BytesRef extend;
+  protected LongsRef base;
+  protected BytesRef extend;
 
   protected final ByteBuffer buffer;
 
