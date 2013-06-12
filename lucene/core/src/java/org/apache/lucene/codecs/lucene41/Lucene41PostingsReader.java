@@ -212,7 +212,6 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
         meta.setDocFP(meta.docFP() + in.readVLong());
       }
       if (fieldHasPositions) {
-        meta.setDocFP(meta.docFP() + in.readVLong());
         meta.setPosFP(meta.posFP() + in.readVLong());
         if (state.totalTermFreq > BLOCK_SIZE) {
           meta.setLastPosBlockOffset(in.readVLong());

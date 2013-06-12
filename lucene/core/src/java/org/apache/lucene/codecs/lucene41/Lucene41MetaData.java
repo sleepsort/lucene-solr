@@ -24,21 +24,23 @@ final class Lucene41MetaData extends TermMetaData {
   byte[] bytes;
 
   public Lucene41MetaData(long docStartFP, long posStartFP, long payStartFP, long skipOffset, long lastPosBlockOffset, int singletonDocID) {
-    super(posStartFP != -1 ? 3 : 1, posStartFP != -1 ? 20 : 4);
+    //super(posStartFP != -1 ? 3 : 1, posStartFP != -1 ? 20 : 4);
+    super(3, 20);
     setDocFP(docStartFP);
     setSingletonDocID(singletonDocID);
-    if (posStartFP != -1) {
+    //if (posStartFP != -1) {
       setPosFP(posStartFP);
       setPayFP(payStartFP);
       setSkipOffset(skipOffset);
       setLastPosBlockOffset(lastPosBlockOffset);
-    }
+    //}
   }
   public Lucene41MetaData(FieldInfo info) {
     this(info.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0);
   }
   public Lucene41MetaData(boolean hasPositions) {
-    super(hasPositions ? 3 : 1, hasPositions ? 20 : 4);
+    //super(hasPositions ? 3 : 1, hasPositions ? 20 : 4);
+    super(3, 20);
   }
 
   public void setSingletonDocID(int singletonDocID) {
