@@ -107,8 +107,8 @@ public class SepPostingsReader extends PostingsReaderBase {
     IOUtils.close(freqIn, docIn, skipIn, posIn, payloadIn);
   }
 
-  public TermMetaData newMetaData() {
-    return new TermMetaData();
+  public TermMetaData newMetaData(FieldInfo info) {
+    return new SepMetaData(info);
   }
 
   @Override

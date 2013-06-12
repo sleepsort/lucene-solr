@@ -16,7 +16,7 @@ public abstract class PostingsReaderBase implements Closeable {
 
   public abstract void init(IndexInput termsIn) throws IOException;
 
-  public abstract TermMetaData newMetaData() throws IOException;
+  public abstract TermMetaData newMetaData(FieldInfo info) throws IOException;
 
   public abstract void nextTerm(FieldInfo fieldInfo, TermProtoData proto) throws IOException;
 

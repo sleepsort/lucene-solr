@@ -139,8 +139,8 @@ public class PulsingPostingsReader extends PostingsReaderBase {
   }
 
   @Override
-  public TermMetaData newMetaData() throws IOException {
-    return new PulsingMetaData();
+  public TermMetaData newMetaData(FieldInfo info) throws IOException {
+    return new PulsingMetaData(info);
   }
 
   @Override

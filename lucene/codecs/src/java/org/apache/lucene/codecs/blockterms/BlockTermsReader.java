@@ -345,7 +345,7 @@ public class BlockTermsReader extends FieldsProducer {
         doOrd = indexReader.supportsOrd();
         fieldTerm.field = fieldInfo.name;
         state = new BlockTermState();
-        proto = new TermProtoData(state, postingsReader.newMetaData());
+        proto = new TermProtoData(state, postingsReader.newMetaData(fieldInfo));
         state.totalTermFreq = -1;
         state.ord = -1;
 

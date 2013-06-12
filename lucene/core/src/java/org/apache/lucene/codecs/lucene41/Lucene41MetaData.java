@@ -11,6 +11,8 @@ import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.TermMetaData;
 import org.apache.lucene.codecs.TermProtoData;
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.util.IOUtils;
 
@@ -32,7 +34,11 @@ final class Lucene41MetaData extends TermMetaData {
       setLastPosBlockOffset(lastPosBlockOffset);
     }
   }
-  public Lucene41MetaData() {
+  public Lucene41MetaData(FieldInfo info) {
+    this(info.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0);
+  }
+  public Lucene41MetaData(boolean hasPositions) {
+    super(hasPositions ? 3 : 1, hasPositions ? 20 : 4);
   }
 
   public void setSingletonDocID(int singletonDocID) {

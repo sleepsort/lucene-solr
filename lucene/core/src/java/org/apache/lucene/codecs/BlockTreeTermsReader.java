@@ -632,7 +632,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
           this.ord = ord;
           this.state = new BlockTermState();
           this.state.totalTermFreq = -1;
-          this.proto = new TermProtoData(state, postingsReader.newMetaData());
+          this.proto = new TermProtoData(state, postingsReader.newMetaData(fieldInfo));
         }
 
         void loadNextFloorBlock() throws IOException {
@@ -2306,7 +2306,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
           this.ord = ord;
           this.state = new BlockTermState();
           this.state.totalTermFreq = -1;
-          this.proto = new TermProtoData(state, postingsReader.newMetaData());
+          this.proto = new TermProtoData(state, postingsReader.newMetaData(fieldInfo));
         }
 
         public void setFloorData(ByteArrayDataInput in, BytesRef source) {

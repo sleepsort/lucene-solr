@@ -7,6 +7,7 @@ import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.TermMetaData;
 import org.apache.lucene.codecs.TermProtoData;
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.util.IOUtils;
 
@@ -23,7 +24,7 @@ final class Lucene40MetaData extends TermMetaData {
     setProxOffset(proxOffset);
     setSkipOffset(skipOffset);
   }
-  public Lucene40MetaData() {
+  public Lucene40MetaData(FieldInfo info) {
   }
 
   public void setFreqOffset(long freqOffset) {

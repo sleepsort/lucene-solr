@@ -7,6 +7,7 @@ import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.TermMetaData;
 import org.apache.lucene.codecs.TermProtoData;
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.util.IOUtils;
 
@@ -23,7 +24,7 @@ final class SepMetaData extends TermMetaData {
   byte[] bytes;
   ByteArrayDataInput bytesReader;
 
-  public SepMetaData() {
+  public SepMetaData(FieldInfo info) {
     throw new IllegalStateException("not implemented");
   }
 }

@@ -118,8 +118,8 @@ public class Lucene40PostingsReader extends PostingsReaderBase {
   }
 
   @Override
-  public TermMetaData newMetaData() {
-    return new Lucene40MetaData();
+  public TermMetaData newMetaData(FieldInfo info) {
+    return new Lucene40MetaData(info);
   }
 
   @Override
