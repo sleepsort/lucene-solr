@@ -53,23 +53,36 @@ public class TermMetaData implements Cloneable {
     this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
   }
   public TermMetaData(int baseLength, int extendLength) {
-    this.base = new LongsRef(new long[baseLength], 0, baseLength);
+    if (baseLength > 0) {
+      this.base = new LongsRef(new long[baseLength], 0, baseLength);
+    } else {
+      this.base = null;
+    }
     if (extendLength > 0) {
       this.extend = new BytesRef(new byte[extendLength]);
+      this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
     } else {
-      this.extend = new BytesRef();
+      this.extend = null;
     }
-    this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
   }
 
   public TermMetaData clone() {
-    throw new IllegalStateException("not implemented");
-  }
+    try {
+      return (TermMetaData)super.clone();
+    } catch (CloneNotSupportedException cnse) {
+      // should not happen
+      throw new RuntimeException(cnse);
+    }
+  } 
   
   public void copyFrom(TermMetaData other) { // nocommit: no deepcopy!
-    this.base = LongsRef.deepCopyOf(other.base);
-    this.extend = BytesRef.deepCopyOf(other.extend);
-    this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
+    if (other.base != null) {
+      this.base = LongsRef.deepCopyOf(other.base);
+    }
+    if (other.extend != null) {
+      this.extend = BytesRef.deepCopyOf(other.extend);
+      this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
+    }
   }
 
   public String toString() {

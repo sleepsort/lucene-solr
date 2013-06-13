@@ -29,13 +29,13 @@ final class PulsingMetaData extends TermMetaData {
 
   @Override
   public PulsingMetaData clone() {
-    PulsingMetaData clone = new PulsingMetaData();
+    PulsingMetaData clone = (PulsingMetaData) super.clone();
     if (postingsSize != -1) {
       clone.postings = new byte[postingsSize];
       System.arraycopy(postings, 0, clone.postings, 0, postingsSize);
     } else {
       assert wrapped != null;
-      clone.wrapped = (BlockTermState) wrapped.clone();
+      clone.wrapped = wrapped.clone();
     }
     return clone;
   }

@@ -87,7 +87,7 @@ final class Lucene41MetaData extends TermMetaData {
   }
   @Override
   public Lucene41MetaData clone() {
-    Lucene41MetaData meta = new Lucene41MetaData();
+    Lucene41MetaData meta = (Lucene41MetaData)super.clone();
     meta.copyFrom(this);
     return meta;
   }

@@ -580,7 +580,7 @@ public class BlockTermsReader extends FieldsProducer {
                   // Store in cache
                   decodeMetaData();
                   //System.out.println("  cache! state=" + state);
-                  termsCache.put(new FieldAndTerm(fieldTerm), (BlockTermState) state.clone());
+                  termsCache.put(new FieldAndTerm(fieldTerm), state.clone());
                 }
 
                 return SeekStatus.FOUND;

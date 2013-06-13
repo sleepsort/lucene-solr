@@ -2131,7 +2131,6 @@ public class BlockTreeTermsReader extends FieldsProducer {
         if (target.compareTo(term) != 0 || !termExists) {
           assert otherState != null && otherState instanceof BlockTermState;
           currentFrame = staticFrame;
-        if (DEBUG) System.out.println("    oldtermState state=" + currentFrame.state);
           currentFrame.state.copyFrom(otherState);
           term.copyBytes(target);
           currentFrame.metaDataUpto = currentFrame.getTermBlockOrd();

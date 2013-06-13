@@ -61,11 +61,6 @@ public class BlockTermState extends OrdTermState {
     termBlockOrd = other.termBlockOrd;
     blockFilePointer = other.blockFilePointer;
     meta = other.meta.clone();
-    //meta = other.meta;
-
-    // NOTE: don't copy blockTermCount;
-    // it's "transient": used only by the "primary"
-    // termState, and regenerated on seek by TermState
   }
 
   @Override
