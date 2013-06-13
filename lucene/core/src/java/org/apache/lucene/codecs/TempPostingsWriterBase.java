@@ -38,11 +38,11 @@ import org.apache.lucene.index.FieldInfo;
 // TODO: find a better name; this defines the API that the
 // terms dict impls use to talk to a postings impl.
 // TermsDict + PostingsReader/WriterBase == PostingsConsumer/Producer
-public abstract class PostingsWriterBase extends PostingsConsumer implements Closeable {
+public abstract class TempPostingsWriterBase extends PostingsConsumer implements Closeable {
 
   /** Sole constructor. (For invocation by subclass 
    *  constructors, typically implicit.) */
-  protected PostingsWriterBase() {
+  protected TempPostingsWriterBase() {
   }
 
   /** Called once after startup, before any terms have been

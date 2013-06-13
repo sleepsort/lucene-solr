@@ -25,6 +25,7 @@ import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.Bits;
+import org.apache.lucene.codecs.temp.TempTermState;
 
 /** The core terms dictionaries (BlockTermsReader,
  *  BlockTreeTermsReader) interact with a single instance
@@ -39,11 +40,11 @@ import org.apache.lucene.util.Bits;
 // TODO: find a better name; this defines the API that the
 // terms dict impls use to talk to a postings impl.
 // TermsDict + PostingsReader/WriterBase == PostingsConsumer/Producer
-public abstract class PostingsReaderBase implements Closeable {
+public abstract class TempPostingsReaderBase implements Closeable {
 
   /** Sole constructor. (For invocation by subclass 
    *  constructors, typically implicit.) */
-  protected PostingsReaderBase() {
+  protected TempPostingsReaderBase() {
   }
 
   /** Performs any initialization, such as reading and
@@ -52,18 +53,18 @@ public abstract class PostingsReaderBase implements Closeable {
   public abstract void init(IndexInput termsIn) throws IOException;
 
   /** Return a newly created empty TermState */
-  public abstract BlockTermState newTermState() throws IOException;
+  public abstract TempTermState newTermState() throws IOException;
 
   /** Actually decode metadata for next term */
-  public abstract void nextTerm(FieldInfo fieldInfo, BlockTermState state) throws IOException;
+  public abstract void nextTerm(FieldInfo fieldInfo, TempTermState state) throws IOException;
 
   /** Must fully consume state, since after this call that
    *  TermState may be reused. */
-  public abstract DocsEnum docs(FieldInfo fieldInfo, BlockTermState state, Bits skipDocs, DocsEnum reuse, int flags) throws IOException;
+  public abstract DocsEnum docs(FieldInfo fieldInfo, TempTermState state, Bits skipDocs, DocsEnum reuse, int flags) throws IOException;
 
   /** Must fully consume state, since after this call that
    *  TermState may be reused. */
-  public abstract DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, BlockTermState state, Bits skipDocs, DocsAndPositionsEnum reuse,
+  public abstract DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TempTermState state, Bits skipDocs, DocsAndPositionsEnum reuse,
                                                         int flags) throws IOException;
 
   @Override
@@ -72,5 +73,5 @@ public abstract class PostingsReaderBase implements Closeable {
   /** Reads data for all terms in the next block; this
    *  method should merely load the byte[] blob but not
    *  decode, which is done in {@link #nextTerm}. */
-  public abstract void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, BlockTermState termState) throws IOException;
+  public abstract void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, TempTermState termState) throws IOException;
 }

@@ -1,4 +1,4 @@
-package org.apache.lucene.codecs;
+package org.apache.lucene.codecs.temp;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -41,6 +41,12 @@ import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.NoOutputs;
 import org.apache.lucene.util.fst.Util;
 import org.apache.lucene.util.packed.PackedInts;
+import org.apache.lucene.codecs.TempPostingsWriterBase;
+import org.apache.lucene.codecs.PostingsConsumer;
+import org.apache.lucene.codecs.FieldsConsumer;
+import org.apache.lucene.codecs.TermsConsumer;
+import org.apache.lucene.codecs.TermStats;
+import org.apache.lucene.codecs.CodecUtil;
 
 /*
   TODO:
@@ -174,16 +180,16 @@ import org.apache.lucene.util.packed.PackedInts;
  * @lucene.experimental
  */
 
-public class BlockTreeTermsWriter extends FieldsConsumer {
+public class TempBlockTermsWriter extends FieldsConsumer {
 
   /** Suggested default value for the {@code
    *  minItemsInBlock} parameter to {@link
-   *  #BlockTreeTermsWriter(SegmentWriteState,PostingsWriterBase,int,int)}. */
+   *  #TempBlockTermsWriter(SegmentWriteState,TempPostingsWriterBase,int,int)}. */
   public final static int DEFAULT_MIN_BLOCK_SIZE = 25;
 
   /** Suggested default value for the {@code
    *  maxItemsInBlock} parameter to {@link
-   *  #BlockTreeTermsWriter(SegmentWriteState,PostingsWriterBase,int,int)}. */
+   *  #TempBlockTermsWriter(SegmentWriteState,TempPostingsWriterBase,int,int)}. */
   public final static int DEFAULT_MAX_BLOCK_SIZE = 48;
 
   //public final static boolean DEBUG = false;
@@ -225,7 +231,7 @@ public class BlockTreeTermsWriter extends FieldsConsumer {
   final int minItemsInBlock;
   final int maxItemsInBlock;
 
-  final PostingsWriterBase postingsWriter;
+  final TempPostingsWriterBase postingsWriter;
   final FieldInfos fieldInfos;
   FieldInfo currentField;
 
@@ -258,9 +264,9 @@ public class BlockTreeTermsWriter extends FieldsConsumer {
    *  sub-blocks) per block will aim to be between
    *  minItemsPerBlock and maxItemsPerBlock, though in some
    *  cases the blocks may be smaller than the min. */
-  public BlockTreeTermsWriter(
+  public TempBlockTermsWriter(
                               SegmentWriteState state,
-                              PostingsWriterBase postingsWriter,
+                              TempPostingsWriterBase postingsWriter,
                               int minItemsInBlock,
                               int maxItemsInBlock)
     throws IOException

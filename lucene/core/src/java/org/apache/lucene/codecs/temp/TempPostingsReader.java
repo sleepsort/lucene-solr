@@ -1,4 +1,4 @@
-package org.apache.lucene.codecs.lucene41;
+package org.apache.lucene.codecs.temp;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -24,9 +24,8 @@ import static org.apache.lucene.codecs.lucene41.ForUtil.MAX_ENCODED_SIZE;
 import java.io.IOException;
 import java.util.Arrays;
 
-import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
-import org.apache.lucene.codecs.PostingsReaderBase;
+import org.apache.lucene.codecs.TempPostingsReaderBase;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfo;
@@ -44,6 +43,9 @@ import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.codecs.lucene41.ForUtil;
+import org.apache.lucene.codecs.lucene41.Lucene41SkipReader;
+
 
 /**
  * Concrete class that reads docId(maybe frq,pos,offset,payloads) list
@@ -52,7 +54,7 @@ import org.apache.lucene.util.IOUtils;
  * @see Lucene41SkipReader for details
  * @lucene.experimental
  */
-public final class Lucene41PostingsReader extends PostingsReaderBase {
+public final class TempPostingsReader extends TempPostingsReaderBase {
 
   private final IndexInput docIn;
   private final IndexInput posIn;
@@ -63,35 +65,35 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   // public static boolean DEBUG = false;
 
   /** Sole constructor. */
-  public Lucene41PostingsReader(Directory dir, FieldInfos fieldInfos, SegmentInfo segmentInfo, IOContext ioContext, String segmentSuffix) throws IOException {
+  public TempPostingsReader(Directory dir, FieldInfos fieldInfos, SegmentInfo segmentInfo, IOContext ioContext, String segmentSuffix) throws IOException {
     boolean success = false;
     IndexInput docIn = null;
     IndexInput posIn = null;
     IndexInput payIn = null;
     try {
-      docIn = dir.openInput(IndexFileNames.segmentFileName(segmentInfo.name, segmentSuffix, Lucene41PostingsFormat.DOC_EXTENSION),
+      docIn = dir.openInput(IndexFileNames.segmentFileName(segmentInfo.name, segmentSuffix, TempPostingsFormat.DOC_EXTENSION),
                             ioContext);
       CodecUtil.checkHeader(docIn,
-                            Lucene41PostingsWriter.DOC_CODEC,
-                            Lucene41PostingsWriter.VERSION_CURRENT,
-                            Lucene41PostingsWriter.VERSION_CURRENT);
+                            TempPostingsWriter.DOC_CODEC,
+                            TempPostingsWriter.VERSION_CURRENT,
+                            TempPostingsWriter.VERSION_CURRENT);
       forUtil = new ForUtil(docIn);
 
       if (fieldInfos.hasProx()) {
-        posIn = dir.openInput(IndexFileNames.segmentFileName(segmentInfo.name, segmentSuffix, Lucene41PostingsFormat.POS_EXTENSION),
+        posIn = dir.openInput(IndexFileNames.segmentFileName(segmentInfo.name, segmentSuffix, TempPostingsFormat.POS_EXTENSION),
                               ioContext);
         CodecUtil.checkHeader(posIn,
-                              Lucene41PostingsWriter.POS_CODEC,
-                              Lucene41PostingsWriter.VERSION_CURRENT,
-                              Lucene41PostingsWriter.VERSION_CURRENT);
+                              TempPostingsWriter.POS_CODEC,
+                              TempPostingsWriter.VERSION_CURRENT,
+                              TempPostingsWriter.VERSION_CURRENT);
 
         if (fieldInfos.hasPayloads() || fieldInfos.hasOffsets()) {
-          payIn = dir.openInput(IndexFileNames.segmentFileName(segmentInfo.name, segmentSuffix, Lucene41PostingsFormat.PAY_EXTENSION),
+          payIn = dir.openInput(IndexFileNames.segmentFileName(segmentInfo.name, segmentSuffix, TempPostingsFormat.PAY_EXTENSION),
                                 ioContext);
           CodecUtil.checkHeader(payIn,
-                                Lucene41PostingsWriter.PAY_CODEC,
-                                Lucene41PostingsWriter.VERSION_CURRENT,
-                                Lucene41PostingsWriter.VERSION_CURRENT);
+                                TempPostingsWriter.PAY_CODEC,
+                                TempPostingsWriter.VERSION_CURRENT,
+                                TempPostingsWriter.VERSION_CURRENT);
         }
       }
 
@@ -110,9 +112,9 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   public void init(IndexInput termsIn) throws IOException {
     // Make sure we are talking to the matching postings writer
     CodecUtil.checkHeader(termsIn,
-                          Lucene41PostingsWriter.TERMS_CODEC,
-                          Lucene41PostingsWriter.VERSION_CURRENT,
-                          Lucene41PostingsWriter.VERSION_CURRENT);
+                          TempPostingsWriter.TERMS_CODEC,
+                          TempPostingsWriter.VERSION_CURRENT,
+                          TempPostingsWriter.VERSION_CURRENT);
     final int indexBlockSize = termsIn.readVInt();
     if (indexBlockSize != BLOCK_SIZE) {
       throw new IllegalStateException("index-time BLOCK_SIZE (" + indexBlockSize + ") != read-time BLOCK_SIZE (" + BLOCK_SIZE + ")");
@@ -142,7 +144,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   }
 
   // Must keep final because we do non-standard clone
-  private final static class IntBlockTermState extends BlockTermState {
+  private final static class IntBlockTermState extends TempTermState {
     long docStartFP;
     long posStartFP;
     long payStartFP;
@@ -200,7 +202,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   /* Reads but does not decode the byte[] blob holding
      metadata for the current terms block */
   @Override
-  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, BlockTermState _termState) throws IOException {
+  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, TempTermState _termState) throws IOException {
     final IntBlockTermState termState = (IntBlockTermState) _termState;
 
     final int numBytes = termsIn.readVInt();
@@ -217,7 +219,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   }
 
   @Override
-  public void nextTerm(FieldInfo fieldInfo, BlockTermState _termState)
+  public void nextTerm(FieldInfo fieldInfo, TempTermState _termState)
     throws IOException {
     final IntBlockTermState termState = (IntBlockTermState) _termState;
     final boolean isFirstTerm = termState.termBlockOrd == 0;
@@ -280,7 +282,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   }
     
   @Override
-  public DocsEnum docs(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
+  public DocsEnum docs(FieldInfo fieldInfo, TempTermState termState, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
     BlockDocsEnum docsEnum;
     if (reuse instanceof BlockDocsEnum) {
       docsEnum = (BlockDocsEnum) reuse;
@@ -296,7 +298,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   // TODO: specialize to liveDocs vs not
   
   @Override
-  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs,
+  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, TempTermState termState, Bits liveDocs,
                                                DocsAndPositionsEnum reuse, int flags)
     throws IOException {
 
@@ -373,7 +375,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
     private int singletonDocID; // docid when there is a single pulsed posting, otherwise -1
 
     public BlockDocsEnum(FieldInfo fieldInfo) throws IOException {
-      this.startDocIn = Lucene41PostingsReader.this.docIn;
+      this.startDocIn = TempPostingsReader.this.docIn;
       this.docIn = null;
       indexHasFreq = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS) >= 0;
       indexHasPos = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
@@ -523,7 +525,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
         if (skipper == null) {
           // Lazy init: first time this enum has ever been used for skipping
           skipper = new Lucene41SkipReader(docIn.clone(),
-                                        Lucene41PostingsWriter.maxSkipLevels,
+                                        TempPostingsWriter.maxSkipLevels,
                                         BLOCK_SIZE,
                                         indexHasPos,
                                         indexHasOffsets,
@@ -671,9 +673,9 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
     private int singletonDocID; // docid when there is a single pulsed posting, otherwise -1
     
     public BlockDocsAndPositionsEnum(FieldInfo fieldInfo) throws IOException {
-      this.startDocIn = Lucene41PostingsReader.this.docIn;
+      this.startDocIn = TempPostingsReader.this.docIn;
       this.docIn = null;
-      this.posIn = Lucene41PostingsReader.this.posIn.clone();
+      this.posIn = TempPostingsReader.this.posIn.clone();
       encoded = new byte[MAX_ENCODED_SIZE];
       indexHasOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
       indexHasPayloads = fieldInfo.hasPayloads();
@@ -852,7 +854,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
           //   System.out.println("    create skipper");
           // }
           skipper = new Lucene41SkipReader(docIn.clone(),
-                                        Lucene41PostingsWriter.maxSkipLevels,
+                                        TempPostingsWriter.maxSkipLevels,
                                         BLOCK_SIZE,
                                         true,
                                         indexHasOffsets,
@@ -1108,10 +1110,10 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
     private int singletonDocID; // docid when there is a single pulsed posting, otherwise -1
     
     public EverythingEnum(FieldInfo fieldInfo) throws IOException {
-      this.startDocIn = Lucene41PostingsReader.this.docIn;
+      this.startDocIn = TempPostingsReader.this.docIn;
       this.docIn = null;
-      this.posIn = Lucene41PostingsReader.this.posIn.clone();
-      this.payIn = Lucene41PostingsReader.this.payIn.clone();
+      this.posIn = TempPostingsReader.this.posIn.clone();
+      this.payIn = TempPostingsReader.this.payIn.clone();
       encoded = new byte[MAX_ENCODED_SIZE];
       indexHasOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
       if (indexHasOffsets) {
@@ -1374,7 +1376,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
           //   System.out.println("    create skipper");
           // }
           skipper = new Lucene41SkipReader(docIn.clone(),
-                                        Lucene41PostingsWriter.maxSkipLevels,
+                                        TempPostingsWriter.maxSkipLevels,
                                         BLOCK_SIZE,
                                         true,
                                         indexHasOffsets,

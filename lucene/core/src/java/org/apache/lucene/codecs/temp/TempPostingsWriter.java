@@ -1,4 +1,4 @@
-package org.apache.lucene.codecs.lucene41;
+package org.apache.lucene.codecs.temp;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -26,8 +26,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.lucene.codecs.CodecUtil;
-import org.apache.lucene.codecs.PostingsWriterBase;
+import org.apache.lucene.codecs.TempPostingsWriterBase;
 import org.apache.lucene.codecs.TermStats;
+import org.apache.lucene.codecs.lucene41.Lucene41SkipWriter;
+import org.apache.lucene.codecs.lucene41.ForUtil;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
@@ -50,7 +52,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * @see Lucene41SkipWriter for details about skipping setting and postings layout.
  * @lucene.experimental
  */
-public final class Lucene41PostingsWriter extends PostingsWriterBase {
+public final class TempPostingsWriter extends TempPostingsWriterBase {
 
   /** 
    * Expert: The maximum number of skip levels. Smaller values result in 
@@ -58,10 +60,10 @@ public final class Lucene41PostingsWriter extends PostingsWriterBase {
    */
   static final int maxSkipLevels = 10;
 
-  final static String TERMS_CODEC = "Lucene41PostingsWriterTerms";
-  final static String DOC_CODEC = "Lucene41PostingsWriterDoc";
-  final static String POS_CODEC = "Lucene41PostingsWriterPos";
-  final static String PAY_CODEC = "Lucene41PostingsWriterPay";
+  final static String TERMS_CODEC = "TempPostingsWriterTerms";
+  final static String DOC_CODEC = "TempPostingsWriterDoc";
+  final static String POS_CODEC = "TempPostingsWriterPos";
+  final static String PAY_CODEC = "TempPostingsWriterPay";
 
   // Increment version to change it
   final static int VERSION_START = 0;
@@ -115,10 +117,10 @@ public final class Lucene41PostingsWriter extends PostingsWriterBase {
   
   /** Creates a postings writer with the specified PackedInts overhead ratio */
   // TODO: does this ctor even make sense?
-  public Lucene41PostingsWriter(SegmentWriteState state, float acceptableOverheadRatio) throws IOException {
+  public TempPostingsWriter(SegmentWriteState state, float acceptableOverheadRatio) throws IOException {
     super();
 
-    docOut = state.directory.createOutput(IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, Lucene41PostingsFormat.DOC_EXTENSION),
+    docOut = state.directory.createOutput(IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, TempPostingsFormat.DOC_EXTENSION),
                                           state.context);
     IndexOutput posOut = null;
     IndexOutput payOut = null;
@@ -128,7 +130,7 @@ public final class Lucene41PostingsWriter extends PostingsWriterBase {
       forUtil = new ForUtil(acceptableOverheadRatio, docOut);
       if (state.fieldInfos.hasProx()) {
         posDeltaBuffer = new int[MAX_DATA_SIZE];
-        posOut = state.directory.createOutput(IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, Lucene41PostingsFormat.POS_EXTENSION),
+        posOut = state.directory.createOutput(IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, TempPostingsFormat.POS_EXTENSION),
                                               state.context);
         CodecUtil.writeHeader(posOut, POS_CODEC, VERSION_CURRENT);
 
@@ -149,7 +151,7 @@ public final class Lucene41PostingsWriter extends PostingsWriterBase {
         }
 
         if (state.fieldInfos.hasPayloads() || state.fieldInfos.hasOffsets()) {
-          payOut = state.directory.createOutput(IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, Lucene41PostingsFormat.PAY_EXTENSION),
+          payOut = state.directory.createOutput(IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, TempPostingsFormat.PAY_EXTENSION),
                                                 state.context);
           CodecUtil.writeHeader(payOut, PAY_CODEC, VERSION_CURRENT);
         }
@@ -184,7 +186,7 @@ public final class Lucene41PostingsWriter extends PostingsWriterBase {
   }
 
   /** Creates a postings writer with <code>PackedInts.COMPACT</code> */
-  public Lucene41PostingsWriter(SegmentWriteState state) throws IOException {
+  public TempPostingsWriter(SegmentWriteState state) throws IOException {
     this(state, PackedInts.COMPACT);
   }
 
