@@ -27,6 +27,8 @@ final class Lucene40MetaData extends TermMetaData {
   public Lucene40MetaData(FieldInfo info) {
     super(2, 8);
   }
+  public Lucene40MetaData() {
+  }
 
   public void setFreqOffset(long freqOffset) {
     base.longs[0] = freqOffset;
@@ -45,5 +47,12 @@ final class Lucene40MetaData extends TermMetaData {
   }
   public long skipOffset() {
     return buffer.getLong(0);
+  }
+
+  @Override
+  public Lucene40MetaData clone() {
+    Lucene40MetaData meta = new Lucene40MetaData();
+    meta.copyFrom(this);
+    return meta;
   }
 }

@@ -45,6 +45,13 @@ public class BlockTermState extends OrdTermState {
   }
 
   @Override
+  public BlockTermState clone() {
+    BlockTermState other = new BlockTermState();
+    other.copyFrom(this);
+    return other;
+  }
+
+  @Override
   public void copyFrom(TermState _other) {
     assert _other instanceof BlockTermState : "can not copy from " + _other.getClass().getName();
     BlockTermState other = (BlockTermState) _other;
@@ -53,7 +60,8 @@ public class BlockTermState extends OrdTermState {
     totalTermFreq = other.totalTermFreq;
     termBlockOrd = other.termBlockOrd;
     blockFilePointer = other.blockFilePointer;
-    meta = other.meta;
+    meta = other.meta.clone();
+    //meta = other.meta;
 
     // NOTE: don't copy blockTermCount;
     // it's "transient": used only by the "primary"
@@ -62,6 +70,6 @@ public class BlockTermState extends OrdTermState {
 
   @Override
   public String toString() {
-    return "docFreq=" + docFreq + " totalTermFreq=" + totalTermFreq + " termBlockOrd=" + termBlockOrd + " blockFP=" + blockFilePointer;
+    return "docFreq=" + docFreq + " totalTermFreq=" + totalTermFreq + " termBlockOrd=" + termBlockOrd + " blockFP=" + blockFilePointer+" "+meta.toString();
   }
 }

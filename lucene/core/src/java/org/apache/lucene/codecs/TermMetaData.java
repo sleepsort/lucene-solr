@@ -3,14 +3,13 @@ package org.apache.lucene.codecs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-
 import org.apache.lucene.index.TermState;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LongsRef;
 
-public class TermMetaData implements Cloneable{
+public class TermMetaData implements Cloneable {
   // It consists of two parts:
   //
   // The base part: 
@@ -40,7 +39,7 @@ public class TermMetaData implements Cloneable{
   protected LongsRef base;
   protected BytesRef extend;
 
-  protected final ByteBuffer buffer;
+  protected ByteBuffer buffer;
 
   public TermMetaData() {
     this.base = null;
@@ -63,12 +62,18 @@ public class TermMetaData implements Cloneable{
     this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
   }
 
-  public TermMetaData clone() {  // since it is already final, no deep copy!
-    return new TermMetaData(base, extend);
+  public TermMetaData clone() {
+    throw new IllegalStateException("not implemented");
+  }
+  
+  public void copyFrom(TermMetaData other) { // nocommit: no deepcopy!
+    this.base = LongsRef.deepCopyOf(other.base);
+    this.extend = BytesRef.deepCopyOf(other.extend);
+    this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
   }
 
   public String toString() {
-    return base.toString() + " " + extend.toString();
+    return "TermMetaData";
   }
   
   public void write(DataOutput out, TermState state) throws IOException {

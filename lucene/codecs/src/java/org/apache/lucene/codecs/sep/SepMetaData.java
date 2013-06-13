@@ -25,12 +25,15 @@ final class SepMetaData extends TermMetaData {
 
   public SepMetaData() {
   }
+  @Override
   public SepMetaData clone() {
     SepMetaData other = new SepMetaData();
     other.copyFrom(this);
     return other;
   }
-  public void copyFrom(SepMetaData other) {
+  @Override
+  public void copyFrom(TermMetaData _other) {
+    SepMetaData other = (SepMetaData) _other;
     if (docIndex == null) {
       docIndex = other.docIndex.clone();
     } else {
@@ -58,3 +61,5 @@ final class SepMetaData extends TermMetaData {
     skipFP = other.skipFP;
   }
 }
+
+
