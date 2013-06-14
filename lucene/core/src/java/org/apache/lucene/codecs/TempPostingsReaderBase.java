@@ -53,7 +53,7 @@ public abstract class TempPostingsReaderBase implements Closeable {
   public abstract void init(IndexInput termsIn) throws IOException;
 
   /** Return a newly created empty TermState */
-  public abstract TempTermState newTermState() throws IOException;
+  public abstract TermMetaData newTermMetaData() throws IOException;
 
   /** Actually decode metadata for next term */
   public abstract void nextTerm(FieldInfo fieldInfo, TempTermState state) throws IOException;

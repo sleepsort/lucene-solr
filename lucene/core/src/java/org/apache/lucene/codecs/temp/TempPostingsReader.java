@@ -43,6 +43,7 @@ import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.codecs.TermMetaData;
 import org.apache.lucene.codecs.lucene41.ForUtil;
 import org.apache.lucene.codecs.lucene41.Lucene41SkipReader;
 
@@ -190,8 +191,8 @@ public final class TempPostingsReader extends TempPostingsReaderBase {
   }
 
   @Override
-  public IntBlockTermState newTermState() {
-    return new IntBlockTermState();
+  public TermMetaData newMetaData() {
+    return new TempMetaData();
   }
 
   @Override

@@ -18,6 +18,7 @@ package org.apache.lucene.codecs.temp;
 
 import org.apache.lucene.index.DocsEnum; // javadocs
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.codecs.TermMetaData;
 
 /**
  * Holds all state required for {@link PostingsReaderBase}
@@ -33,6 +34,8 @@ public class TempTermState extends TermState {
   /** the term's ord in the current block */
   public int termBlockOrd;
 
+  public TermMetaData meta;
+
   /** Sole constructor. (For invocation by subclass 
    *  constructors, typically implicit.) */
   protected TempTermState() {
@@ -45,6 +48,7 @@ public class TempTermState extends TermState {
     docFreq = other.docFreq;
     totalTermFreq = other.totalTermFreq;
     termBlockOrd = other.termBlockOrd;
+    meta.copyFrom(other.meta);
   }
 
   @Override

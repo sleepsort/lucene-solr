@@ -630,7 +630,8 @@ public class TempBlockTermsReader extends FieldsProducer {
 
         public Frame(int ord) throws IOException {
           this.ord = ord;
-          termState = postingsReader.newTermState();
+          termState = new TempTermState();
+          termState.meta = postingsReader.newTermMetaData();
           termState.totalTermFreq = -1;
         }
 
@@ -2302,7 +2303,8 @@ public class TempBlockTermsReader extends FieldsProducer {
 
         public Frame(int ord) throws IOException {
           this.ord = ord;
-          state = postingsReader.newTermState();
+          state = new TempTermState();
+          state.meta = postingsReader.newTermMetaData();
           state.totalTermFreq = -1;
         }
 
