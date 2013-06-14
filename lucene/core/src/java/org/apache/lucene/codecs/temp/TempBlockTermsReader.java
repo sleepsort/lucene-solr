@@ -628,6 +628,10 @@ public class TempBlockTermsReader extends FieldsProducer {
         private int startBytePos;
         private int suffix;
 
+        // buffer current block of term metadata
+        ByteArrayDataInput bytesReader;
+        byte[] bytes;
+
         public Frame(int ord) throws IOException {
           this.ord = ord;
           termState = new TempTermState();
@@ -730,8 +734,17 @@ public class TempBlockTermsReader extends FieldsProducer {
 
           termState.termBlockOrd = 0;
           nextEnt = 0;
-          
-          postingsReader.readTermsBlock(in, fieldInfo, termState);
+
+          // metadata 
+          numBytes = in.readVInt();
+          if (bytes == null) {
+            bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
+            bytesReader = new ByteArrayDataInput();
+          } else if (bytes.length < numBytes) {
+            bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
+          }
+          in.readBytes(bytes, 0, numBytes);
+          bytesReader.reset(bytes, 0, numBytes);
 
           if (!isLastInFloor) {
             // Sub-blocks of a single floor block are always
@@ -808,7 +821,7 @@ public class TempBlockTermsReader extends FieldsProducer {
               //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
             }
 
-            postingsReader.nextTerm(fieldInfo, termState);
+            postingsReader.nextTerm(fieldInfo, termState, bytesReader);
             metaDataUpto++;
             termState.termBlockOrd++;
           }
@@ -2301,6 +2314,10 @@ public class TempBlockTermsReader extends FieldsProducer {
 
         final TempTermState state;
 
+        // buffer current block of term metadata
+        ByteArrayDataInput bytesReader;
+        byte[] bytes;
+
         public Frame(int ord) throws IOException {
           this.ord = ord;
           state = new TempTermState();
@@ -2401,9 +2418,16 @@ public class TempBlockTermsReader extends FieldsProducer {
           nextEnt = 0;
           lastSubFP = -1;
 
-          // TODO: we could skip this if !hasTerms; but
-          // that's rare so won't help much
-          postingsReader.readTermsBlock(in, fieldInfo, state);
+          // metadata 
+          numBytes = in.readVInt();
+          if (bytes == null) {
+            bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
+            bytesReader = new ByteArrayDataInput();
+          } else if (bytes.length < numBytes) {
+            bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
+          }
+          in.readBytes(bytes, 0, numBytes);
+          bytesReader.reset(bytes, 0, numBytes);
 
           // Sub-blocks of a single floor block are always
           // written one after another -- tail recurse:
@@ -2611,7 +2635,7 @@ public class TempBlockTermsReader extends FieldsProducer {
               //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
             }
 
-            postingsReader.nextTerm(fieldInfo, state);
+            postingsReader.nextTerm(fieldInfo, state, bytesReader);
             metaDataUpto++;
             state.termBlockOrd++;
           }

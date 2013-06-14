@@ -32,11 +32,6 @@ final class TempMetaData extends TermMetaData {
   // freq is always implicitly totalTermFreq in this case.
   int singletonDocID;
 
-  // Only used by the "primary" TermMetaData -- clones don't
-  // copy this (basically they are "transient"):
-  ByteArrayDataInput bytesReader;
-  byte[] bytes;
-
   @Override
   public TempMetaData clone() {
     TempMetaData other = new TempMetaData();
@@ -54,11 +49,6 @@ final class TempMetaData extends TermMetaData {
     lastPosBlockOffset = other.lastPosBlockOffset;
     skipOffset = other.skipOffset;
     singletonDocID = other.singletonDocID;
-
-    // Do not copy bytes, bytesReader (else TermMetaData is
-    // very heavy, ie drags around the entire block's
-    // byte[]).  On seek back, if next() is in fact used
-    // (rare!), they will be re-read from disk.
   }
 
   @Override

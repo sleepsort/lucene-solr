@@ -24,6 +24,7 @@ import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.codecs.temp.TempTermState;
 
@@ -56,7 +57,7 @@ public abstract class TempPostingsReaderBase implements Closeable {
   public abstract TermMetaData newTermMetaData() throws IOException;
 
   /** Actually decode metadata for next term */
-  public abstract void nextTerm(FieldInfo fieldInfo, TempTermState state) throws IOException;
+  public abstract void nextTerm(FieldInfo fieldInfo, TempTermState state, ByteArrayDataInput bytesReader) throws IOException;
 
   /** Must fully consume state, since after this call that
    *  TermState may be reused. */
@@ -69,9 +70,4 @@ public abstract class TempPostingsReaderBase implements Closeable {
 
   @Override
   public abstract void close() throws IOException;
-
-  /** Reads data for all terms in the next block; this
-   *  method should merely load the byte[] blob but not
-   *  decode, which is done in {@link #nextTerm}. */
-  public abstract void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, TempTermState termState) throws IOException;
 }
