@@ -59,12 +59,6 @@ public abstract class TempPostingsWriterBase extends PostingsConsumer implements
    *  document. */
   public abstract void startTerm() throws IOException;
 
-  /** Flush count terms starting at start "backwards", as a
-   *  block. start is a negative offset from the end of the
-   *  terms stack, ie bigger start means further back in
-   *  the stack. */
-  public abstract void flushTermsBlock(IndexOutput termsOut, int start, int count) throws IOException;
-
   /** Finishes the current term.  The provided {@link
    *  TempTermState} contains the term's summary statistics. */
   public abstract void finishTerm(TempTermState state) throws IOException;

@@ -957,8 +957,41 @@ public class TempBlockTermsWriter extends FieldsConsumer {
 
       return new PendingBlock(prefix, startFP, termCount != 0, isFloor, floorLeadByte, subIndices);
     }
+    private final RAMOutputStream bytesWriter3 = new RAMOutputStream();
+
+    /** Flush count terms starting at start "backwards", as a
+     *  block. start is a negative offset from the end of the
+     *  terms stack, ie bigger start means further back in
+     *  the stack. */
     void flushTermsBlock(int start, int count) throws IOException {
-      postingsWriter.flushTermsBlock(out, start, count);
+      if (count == 0) {
+        out.writeByte((byte) 0);
+        return;
+      }
+
+      assert start <= pendingMetaData.size();
+      assert count <= start;
+
+      final int limit = pendingMetaData.size() - start + count;
+
+      TermMetaData upto, last, delta;
+      last = postingsWriter.newTermMetaData();
+      for(int idx=limit-count; idx<limit; idx++) {
+        upto = pendingMetaData.get(idx);
+        // nocommit: wow ... FP is smaller than 
+        // latest trunk version... somebody optimized the PF?
+        delta = upto.subtract(last);
+        delta.write(bytesWriter3, fieldInfo, null);
+        // nocommit: last = upto ? sadly no... 
+        // With terms A, B, C, lastDocFP[C] == docFP[A], if docFP[B] == -1
+        last = delta.add(last);
+      }
+      out.writeVInt((int) bytesWriter3.getFilePointer());
+      bytesWriter3.writeTo(out);
+      bytesWriter3.reset();
+
+      // Remove the terms we just wrote:
+      pendingMetaData.subList(limit-count, limit).clear();
     }
 
     TermsWriter(FieldInfo fieldInfo) {
@@ -1000,6 +1033,7 @@ public class TempBlockTermsWriter extends FieldsConsumer {
     }
 
     private final IntsRef scratchIntsRef = new IntsRef();
+    private final List<TermMetaData> pendingMetaData = new ArrayList<TermMetaData>();
 
     @Override
     public void finishTerm(BytesRef text, TermStats stats) throws IOException {
@@ -1013,8 +1047,9 @@ public class TempBlockTermsWriter extends FieldsConsumer {
       TempTermState termState = new TempTermState();
       termState.docFreq = stats.docFreq;
       termState.totalTermFreq = stats.totalTermFreq;
-      termState.meta = postingsWriter.newTermMetaData();
+      //termState.meta = postingsWriter.newTermMetaData();
       postingsWriter.finishTerm(termState);
+      pendingMetaData.add(termState.meta);
       numTerms++;
     }
 

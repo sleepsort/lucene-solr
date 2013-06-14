@@ -17,9 +17,19 @@ package org.apache.lucene.codecs;
  * limitations under the License.
  */
 
+import java.io.IOException;
+
+import org.apache.lucene.store.DataInput;
+import org.apache.lucene.store.DataOutput;
+import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.codecs.temp.TempTermState;
+
 public abstract class TermMetaData implements Cloneable {
+
+  /* no arg means the instance will be always 'less than' any other instance */
   public TermMetaData() {
   }
+
   public TermMetaData clone() {
     try {
       return (TermMetaData)super.clone();
@@ -28,4 +38,18 @@ public abstract class TermMetaData implements Cloneable {
     }
   }
   public abstract void copyFrom(TermMetaData other);
+
+  /* return (this - smaller), if possible */
+  public abstract TermMetaData subtract(TermMetaData inc);
+
+  /* return (this + inc), if possible */
+  public abstract TermMetaData add(TermMetaData inc);
+
+  public abstract void write(DataOutput out, FieldInfo info, TempTermState state) throws IOException;
+
+  public abstract void read(DataInput out, FieldInfo info, TempTermState state) throws IOException;
+
+  public String toString() {
+    return "TermMetaData";
+  }
 }
