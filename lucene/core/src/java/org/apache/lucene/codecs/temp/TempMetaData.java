@@ -32,6 +32,18 @@ final class TempMetaData extends TermMetaData {
   // freq is always implicitly totalTermFreq in this case.
   int singletonDocID;
 
+  TempMetaData() {
+  }
+
+  TempMetaData(long docStartFP, long posStartFP, long payStartFP, long skipOffset, long lastPosBlockOffset, int singletonDocID) {
+    this.docStartFP = docStartFP;
+    this.posStartFP = posStartFP;
+    this.payStartFP = payStartFP;
+    this.skipOffset = skipOffset;
+    this.lastPosBlockOffset = lastPosBlockOffset;
+    this.singletonDocID = singletonDocID;
+  }
+
   @Override
   public TempMetaData clone() {
     TempMetaData other = new TempMetaData();

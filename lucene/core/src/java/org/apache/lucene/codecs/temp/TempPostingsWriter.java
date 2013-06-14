@@ -41,6 +41,7 @@ import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.packed.PackedInts;
+import org.apache.lucene.codecs.TermMetaData;
 
 
 /**
@@ -72,8 +73,6 @@ public final class TempPostingsWriter extends TempPostingsWriterBase {
   final IndexOutput docOut;
   final IndexOutput posOut;
   final IndexOutput payOut;
-
-  private IndexOutput termsOut;
 
   // How current field indexes postings:
   private boolean fieldHasFreqs;
@@ -192,7 +191,6 @@ public final class TempPostingsWriter extends TempPostingsWriterBase {
 
   @Override
   public void start(IndexOutput termsOut) throws IOException {
-    this.termsOut = termsOut;
     CodecUtil.writeHeader(termsOut, TERMS_CODEC, VERSION_CURRENT);
     termsOut.writeVInt(BLOCK_SIZE);
   }
@@ -350,37 +348,24 @@ public final class TempPostingsWriter extends TempPostingsWriterBase {
     }
   }
 
-  private static class PendingTerm {
-    public final long docStartFP;
-    public final long posStartFP;
-    public final long payStartFP;
-    public final long skipOffset;
-    public final long lastPosBlockOffset;
-    public final int singletonDocID;
+  private final List<TempMetaData> pendingTerms = new ArrayList<TempMetaData>();
 
-    public PendingTerm(long docStartFP, long posStartFP, long payStartFP, long skipOffset, long lastPosBlockOffset, int singletonDocID) {
-      this.docStartFP = docStartFP;
-      this.posStartFP = posStartFP;
-      this.payStartFP = payStartFP;
-      this.skipOffset = skipOffset;
-      this.lastPosBlockOffset = lastPosBlockOffset;
-      this.singletonDocID = singletonDocID;
-    }
+  @Override
+  public TermMetaData newTermMetaData() {
+    return new TempMetaData();
   }
-
-  private final List<PendingTerm> pendingTerms = new ArrayList<PendingTerm>();
 
   /** Called when we are done adding docs to this term */
   @Override
-  public void finishTerm(TermStats stats) throws IOException {
-    assert stats.docFreq > 0;
+  public void finishTerm(TempTermState state) throws IOException {
+    assert state.docFreq > 0;
 
     // TODO: wasteful we are counting this (counting # docs
     // for this term) in two places?
-    assert stats.docFreq == docCount: stats.docFreq + " vs " + docCount;
+    assert state.docFreq == docCount: state.docFreq + " vs " + docCount;
 
     // if (DEBUG) {
-    //   System.out.println("FPW.finishTerm docFreq=" + stats.docFreq);
+    //   System.out.println("FPW.finishTerm docFreq=" + state.docFreq);
     // }
 
     // if (DEBUG) {
@@ -391,7 +376,7 @@ public final class TempPostingsWriter extends TempPostingsWriterBase {
     
     // docFreq == 1, don't write the single docid/freq to a separate file along with a pointer to it.
     final int singletonDocID;
-    if (stats.docFreq == 1) {
+    if (state.docFreq == 1) {
       // pulse the singleton docid into the term dictionary, freq is implicitly totalTermFreq
       singletonDocID = docDeltaBuffer[0];
     } else {
@@ -422,8 +407,8 @@ public final class TempPostingsWriter extends TempPostingsWriterBase {
 
       // totalTermFreq is just total number of positions(or payloads, or offsets)
       // associated with current term.
-      assert stats.totalTermFreq != -1;
-      if (stats.totalTermFreq > BLOCK_SIZE) {
+      assert state.totalTermFreq != -1;
+      if (state.totalTermFreq > BLOCK_SIZE) {
         // record file offset for last pos in last block
         lastPosBlockOffset = posOut.getFilePointer() - posTermStartFP;
       } else {
@@ -488,7 +473,7 @@ public final class TempPostingsWriter extends TempPostingsWriterBase {
         }
       }
       // if (DEBUG) {
-      //   System.out.println("  totalTermFreq=" + stats.totalTermFreq + " lastPosBlockOffset=" + lastPosBlockOffset);
+      //   System.out.println("  totalTermFreq=" + state.totalTermFreq + " lastPosBlockOffset=" + lastPosBlockOffset);
       // }
     } else {
       lastPosBlockOffset = -1;
@@ -509,7 +494,7 @@ public final class TempPostingsWriter extends TempPostingsWriterBase {
     }
 
     long payStartFP;
-    if (stats.totalTermFreq >= BLOCK_SIZE) {
+    if (state.totalTermFreq >= BLOCK_SIZE) {
       payStartFP = payTermStartFP;
     } else {
       payStartFP = -1;
@@ -519,7 +504,7 @@ public final class TempPostingsWriter extends TempPostingsWriterBase {
     //   System.out.println("  payStartFP=" + payStartFP);
     // }
 
-    pendingTerms.add(new PendingTerm(docTermStartFP, posTermStartFP, payStartFP, skipOffset, lastPosBlockOffset, singletonDocID));
+    pendingTerms.add(new TempMetaData(docTermStartFP, posTermStartFP, payStartFP, skipOffset, lastPosBlockOffset, singletonDocID));
     docBufferUpto = 0;
     posBufferUpto = 0;
     lastDocID = 0;
@@ -529,7 +514,7 @@ public final class TempPostingsWriter extends TempPostingsWriterBase {
   private final RAMOutputStream bytesWriter = new RAMOutputStream();
 
   @Override
-  public void flushTermsBlock(int start, int count) throws IOException {
+  public void flushTermsBlock(IndexOutput termsOut, int start, int count) throws IOException {
 
     if (count == 0) {
       termsOut.writeByte((byte) 0);
@@ -545,7 +530,7 @@ public final class TempPostingsWriter extends TempPostingsWriterBase {
     long lastPosStartFP = 0;
     long lastPayStartFP = 0;
     for(int idx=limit-count; idx<limit; idx++) {
-      PendingTerm term = pendingTerms.get(idx);
+      TempMetaData term = pendingTerms.get(idx);
 
       if (term.singletonDocID == -1) {
         bytesWriter.writeVLong(term.docStartFP - lastDocStartFP);

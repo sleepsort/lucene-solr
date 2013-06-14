@@ -53,7 +53,7 @@ public abstract class TempPostingsReaderBase implements Closeable {
    *  dictionary {@link IndexInput}. */
   public abstract void init(IndexInput termsIn) throws IOException;
 
-  /** Return a newly created empty TermState */
+  /** Return a newly created empty TermMetaData */
   public abstract TermMetaData newTermMetaData() throws IOException;
 
   /** Actually decode metadata for next term */

@@ -47,6 +47,7 @@ import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.TermsConsumer;
 import org.apache.lucene.codecs.TermStats;
 import org.apache.lucene.codecs.CodecUtil;
+import org.apache.lucene.codecs.TermMetaData;
 
 /*
   TODO:
@@ -937,7 +938,7 @@ public class TempBlockTermsWriter extends FieldsConsumer {
       bytesWriter2.reset();
 
       // Have postings writer write block
-      postingsWriter.flushTermsBlock(futureTermCount+termCount, termCount);
+      flushTermsBlock(futureTermCount+termCount, termCount);
 
       // Remove slice replaced by block:
       slice.clear();
@@ -955,6 +956,9 @@ public class TempBlockTermsWriter extends FieldsConsumer {
       // }
 
       return new PendingBlock(prefix, startFP, termCount != 0, isFloor, floorLeadByte, subIndices);
+    }
+    void flushTermsBlock(int start, int count) throws IOException {
+      postingsWriter.flushTermsBlock(out, start, count);
     }
 
     TermsWriter(FieldInfo fieldInfo) {
@@ -1005,7 +1009,12 @@ public class TempBlockTermsWriter extends FieldsConsumer {
 
       blockBuilder.add(Util.toIntsRef(text, scratchIntsRef), noOutputs.getNoOutput());
       pending.add(new PendingTerm(BytesRef.deepCopyOf(text), stats));
-      postingsWriter.finishTerm(stats);
+      
+      TempTermState termState = new TempTermState();
+      termState.docFreq = stats.docFreq;
+      termState.totalTermFreq = stats.totalTermFreq;
+      termState.meta = postingsWriter.newTermMetaData();
+      postingsWriter.finishTerm(termState);
       numTerms++;
     }
 

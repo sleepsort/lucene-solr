@@ -22,6 +22,7 @@ import java.io.Closeable;
 
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.codecs.temp.TempTermState;
 
 /**
  * Extension of {@link PostingsConsumer} to support pluggable term dictionaries.
@@ -50,8 +51,11 @@ public abstract class TempPostingsWriterBase extends PostingsConsumer implements
    *  the provided {@code termsOut}. */
   public abstract void start(IndexOutput termsOut) throws IOException;
 
+  /** Return a newly created empty TermMetaData*/
+  public abstract TermMetaData newTermMetaData() throws IOException;
+
   /** Start a new term.  Note that a matching call to {@link
-   *  #finishTerm(TermStats)} is done, only if the term has at least one
+   *  #finishTerm(TempTermState)} is done, only if the term has at least one
    *  document. */
   public abstract void startTerm() throws IOException;
 
@@ -59,11 +63,11 @@ public abstract class TempPostingsWriterBase extends PostingsConsumer implements
    *  block. start is a negative offset from the end of the
    *  terms stack, ie bigger start means further back in
    *  the stack. */
-  public abstract void flushTermsBlock(int start, int count) throws IOException;
+  public abstract void flushTermsBlock(IndexOutput termsOut, int start, int count) throws IOException;
 
   /** Finishes the current term.  The provided {@link
-   *  TermStats} contains the term's summary statistics. */
-  public abstract void finishTerm(TermStats stats) throws IOException;
+   *  TempTermState} contains the term's summary statistics. */
+  public abstract void finishTerm(TempTermState state) throws IOException;
 
   /** Called when the writing switches to another field. */
   public abstract void setField(FieldInfo fieldInfo);
