@@ -41,6 +41,12 @@ public class TempTermState extends TermState {
   protected TempTermState() {
   }
 
+  public TempTermState clone() {
+    TempTermState other = (TempTermState)super.clone();
+    other.meta = this.meta.clone();  // nocommit: why do we need to clone all?
+    return other;
+  }
+
   @Override
   public void copyFrom(TermState _other) {
     assert _other instanceof TempTermState : "can not copy from " + _other.getClass().getName();
@@ -48,7 +54,7 @@ public class TempTermState extends TermState {
     docFreq = other.docFreq;
     totalTermFreq = other.totalTermFreq;
     termBlockOrd = other.termBlockOrd;
-    meta.copyFrom(other.meta);
+    meta = other.meta.clone();
   }
 
   @Override
