@@ -150,48 +150,44 @@ final class TempMetaData extends TermMetaData {
     boolean fieldHasOffsets = indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
     boolean fieldHasPayloads = info.hasPayloads();
 
-    if (isFirstTerm) {
-      if (state.docFreq == 1) {
-        singletonDocID = in.readVInt();
+    if (state.docFreq == 1) {
+      singletonDocID = in.readVInt();
+      if (isFirstTerm) {
         docStartFP = 0;
       } else {
-        singletonDocID = -1;
-        docStartFP = in.readVLong();
-      }
-      if (fieldHasPositions) {
-        posStartFP = in.readVLong();
-        if (state.totalTermFreq > BLOCK_SIZE) {
-          lastPosBlockOffset = in.readVLong();
-        } else {
-          lastPosBlockOffset = -1;
-        }
-        if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
-          payStartFP = in.readVLong();
-        } else {
-          payStartFP = -1;
-        }
       }
     } else {
-      if (state.docFreq == 1) {
-        singletonDocID = in.readVInt();
+      singletonDocID = -1;
+      if (isFirstTerm) {
+        docStartFP = in.readVLong();
       } else {
-        singletonDocID = -1;
         docStartFP += in.readVLong();
       }
-      if (fieldHasPositions) {
+    }
+    if (fieldHasPositions) {
+      if (isFirstTerm) {
+        posStartFP = in.readVLong();
+      } else {
         posStartFP += in.readVLong();
-        if (state.totalTermFreq > BLOCK_SIZE) {
-          lastPosBlockOffset = in.readVLong();
+      }
+      if (state.totalTermFreq > BLOCK_SIZE) {
+        lastPosBlockOffset = in.readVLong();
+      } else {
+        lastPosBlockOffset = -1;
+      }
+      if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
+        if (isFirstTerm) {
+          payStartFP = in.readVLong();
         } else {
-          lastPosBlockOffset = -1;
-        }
-        if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
-          long delta = in.readVLong();
-          if (payStartFP == -1) {
-            payStartFP = delta;
+          if (payStartFP == -1) {  // fucking point, the *first* one with payload
+            payStartFP = in.readVLong();
           } else {
-            payStartFP += delta;
+            payStartFP += in.readVLong();
           }
+        }
+      } else {
+        if (isFirstTerm) {
+          payStartFP = -1;  // only once set as -1, at most once
         }
       }
     }
