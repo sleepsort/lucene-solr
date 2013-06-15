@@ -1,99 +1,66 @@
 package org.apache.lucene.codecs;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-import org.apache.lucene.index.TermState;
+import java.io.IOException;
+
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.LongsRef;
+import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.codecs.temp.TempTermState;
 
-public class TermMetaData implements Cloneable {
-  // It consists of two parts:
-  //
-  // The base part: 
-  //   long array, in which every value increases 
-  //   monotonically at the same time.
-  //
-  // The extend part:
-  //   byte array, in which non-monotonical values
-  //   are stored/encoded.
-  //
-  // NOTE: For raw output, 
-  // it is always assumed that, when we have
-  //   this.base[i] < another.base[i],
-  // for all j in [base.offset, base.end)
-  //   this.base[j] <= another.base[j]
-  // with this property, we might have better compression 
-  // for base part.
-  //
-  // However, this property is not guraranteed for all intermediate
-  // outputs in a FST, e.g. a TermMetaData shared by two arcs might
-  // get a 'skewed' output, which is not possible to be compared with others
-  // Therefore during building phase, we have to iterate each long value 
-  // to see whether the 'comparable' property still holds.
-  //
-  // NOTE: only use signed part of long value, which is 63 bits
-  //
-  protected LongsRef base;
-  protected BytesRef extend;
+public abstract class TermMetaData implements Cloneable {
 
-  protected ByteBuffer buffer;
-
+  /* no arg means the instance will be always 'less than' any other instance */
   public TermMetaData() {
-    this.base = null;
-    this.extend = null;
-    this.buffer = null;
-  }
-
-  public TermMetaData(LongsRef l, BytesRef b) {
-    this.base = l;
-    this.extend = b;
-    this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
-  }
-  public TermMetaData(int baseLength, int extendLength) {
-    if (baseLength > 0) {
-      this.base = new LongsRef(new long[baseLength], 0, baseLength);
-    } else {
-      this.base = null;
-    }
-    if (extendLength > 0) {
-      this.extend = new BytesRef(new byte[extendLength]);
-      this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
-    } else {
-      this.extend = null;
-    }
   }
 
   public TermMetaData clone() {
     try {
       return (TermMetaData)super.clone();
     } catch (CloneNotSupportedException cnse) {
-      // should not happen
       throw new RuntimeException(cnse);
     }
-  } 
-  
-  public void copyFrom(TermMetaData other) { // nocommit: no deepcopy!
-    if (other.base != null) {
-      this.base = LongsRef.deepCopyOf(other.base);
-    }
-    if (other.extend != null) {
-      this.extend = BytesRef.deepCopyOf(other.extend);
-      this.buffer = ByteBuffer.wrap(extend.bytes, extend.offset, extend.length);
-    }
   }
+  public abstract void copyFrom(TermMetaData other);
+
+  /* return a cloned instance,
+   * for monotonic fields, the values are (this - dec) */
+  public abstract TermMetaData subtract(TermMetaData dec);
+
+  /* return a cloned instance,
+   * for monotonic fields, the values are (this + inc) */
+  public abstract TermMetaData add(TermMetaData inc);
+
+  /* return current instance,
+   * for 'empty' fields in 'this', pad with values from its precedent 
+   * e.g. in usual cases, value of an 'empty' field is -1 */
+  public abstract TermMetaData pad(TermMetaData pre);
+
+  /* return current instance,
+   * clear all fields so that this.equals(TermMetaData()) */
+  public abstract TermMetaData clear();
+
+  public abstract void write(DataOutput out, FieldInfo info, TempTermState state) throws IOException;
+
+  public abstract void read(DataInput out, FieldInfo info, TempTermState state) throws IOException;
 
   public String toString() {
     return "TermMetaData";
   }
-  
-  public void write(DataOutput out, TermState state) throws IOException {
-    throw new IllegalStateException("not implemented");
-  }
-  public void read(DataInput in, TermState state) throws IOException {
-    throw new IllegalStateException("not implemented");
-  }
-
 }
