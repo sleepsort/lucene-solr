@@ -348,7 +348,25 @@ public final class Lucene41PostingsWriter extends PostingsWriterBase {
     }
   }
 
-  private final List<Lucene41MetaData> pendingTerms = new ArrayList<Lucene41MetaData>();
+  private static class PendingTerm {
+    public final long docStartFP;
+    public final long posStartFP;
+    public final long payStartFP;
+    public final long skipOffset;
+    public final long lastPosBlockOffset;
+    public final int singletonDocID;
+
+    public PendingTerm(long docStartFP, long posStartFP, long payStartFP, long skipOffset, long lastPosBlockOffset, int singletonDocID) {
+      this.docStartFP = docStartFP;
+      this.posStartFP = posStartFP;
+      this.payStartFP = payStartFP;
+      this.skipOffset = skipOffset;
+      this.lastPosBlockOffset = lastPosBlockOffset;
+      this.singletonDocID = singletonDocID;
+    }
+  }
+
+  private final List<PendingTerm> pendingTerms = new ArrayList<PendingTerm>();
 
   /** Called when we are done adding docs to this term */
   @Override
@@ -499,7 +517,7 @@ public final class Lucene41PostingsWriter extends PostingsWriterBase {
     //   System.out.println("  payStartFP=" + payStartFP);
     // }
 
-    pendingTerms.add(new Lucene41MetaData(docTermStartFP, posTermStartFP, payStartFP, skipOffset, lastPosBlockOffset, singletonDocID));
+    pendingTerms.add(new PendingTerm(docTermStartFP, posTermStartFP, payStartFP, skipOffset, lastPosBlockOffset, singletonDocID));
     docBufferUpto = 0;
     posBufferUpto = 0;
     lastDocID = 0;
@@ -525,29 +543,29 @@ public final class Lucene41PostingsWriter extends PostingsWriterBase {
     long lastPosStartFP = 0;
     long lastPayStartFP = 0;
     for(int idx=limit-count; idx<limit; idx++) {
-      Lucene41MetaData term = pendingTerms.get(idx);
+      PendingTerm term = pendingTerms.get(idx);
 
-      if (term.singletonDocID() == -1) {
-        bytesWriter.writeVLong(term.docFP() - lastDocStartFP);
-        lastDocStartFP = term.docFP();
+      if (term.singletonDocID == -1) {
+        bytesWriter.writeVLong(term.docStartFP - lastDocStartFP);
+        lastDocStartFP = term.docStartFP;
       } else {
-        bytesWriter.writeVInt(term.singletonDocID());
+        bytesWriter.writeVInt(term.singletonDocID);
       }
 
       if (fieldHasPositions) {
-        bytesWriter.writeVLong(term.posFP() - lastPosStartFP);
-        lastPosStartFP = term.posFP();
-        if (term.lastPosBlockOffset() != -1) {
-          bytesWriter.writeVLong(term.lastPosBlockOffset());
+        bytesWriter.writeVLong(term.posStartFP - lastPosStartFP);
+        lastPosStartFP = term.posStartFP;
+        if (term.lastPosBlockOffset != -1) {
+          bytesWriter.writeVLong(term.lastPosBlockOffset);
         }
-        if ((fieldHasPayloads || fieldHasOffsets) && term.payFP() != -1) {
-          bytesWriter.writeVLong(term.payFP() - lastPayStartFP);
-          lastPayStartFP = term.payFP();
+        if ((fieldHasPayloads || fieldHasOffsets) && term.payStartFP != -1) {
+          bytesWriter.writeVLong(term.payStartFP - lastPayStartFP);
+          lastPayStartFP = term.payStartFP;
         }
       }
 
-      if (term.skipOffset() != -1) {
-        bytesWriter.writeVLong(term.skipOffset());
+      if (term.skipOffset != -1) {
+        bytesWriter.writeVLong(term.skipOffset);
       }
     }
 

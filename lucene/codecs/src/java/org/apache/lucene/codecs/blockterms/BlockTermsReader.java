@@ -341,8 +341,7 @@ public class BlockTermsReader extends FieldsProducer {
         indexEnum = indexReader.getFieldEnum(fieldInfo);
         doOrd = indexReader.supportsOrd();
         fieldTerm.field = fieldInfo.name;
-        state = new BlockTermState();
-        state.meta = postingsReader.newMetaData(fieldInfo);
+        state = postingsReader.newTermState();
         state.totalTermFreq = -1;
         state.ord = -1;
 
@@ -580,7 +579,7 @@ public class BlockTermsReader extends FieldsProducer {
                   // Store in cache
                   decodeMetaData();
                   //System.out.println("  cache! state=" + state);
-                  termsCache.put(new FieldAndTerm(fieldTerm), state.clone());
+                  termsCache.put(new FieldAndTerm(fieldTerm), (BlockTermState) state.clone());
                 }
 
                 return SeekStatus.FOUND;

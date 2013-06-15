@@ -34,21 +34,11 @@ public class BlockTermState extends OrdTermState {
   /** the term's ord in the current block */
   public int termBlockOrd;
   /** fp into the terms dict primary file (_X.tim) that holds this term */
-  // TODO: only used in BlockTermDict
   public long blockFilePointer;
-
-  public TermMetaData meta;
 
   /** Sole constructor. (For invocation by subclass 
    *  constructors, typically implicit.) */
-  public BlockTermState() {
-  }
-
-  @Override
-  public BlockTermState clone() {
-    BlockTermState other = new BlockTermState();
-    other.copyFrom(this);
-    return other;
+  protected BlockTermState() {
   }
 
   @Override
@@ -60,11 +50,14 @@ public class BlockTermState extends OrdTermState {
     totalTermFreq = other.totalTermFreq;
     termBlockOrd = other.termBlockOrd;
     blockFilePointer = other.blockFilePointer;
-    meta = other.meta.clone();
+
+    // NOTE: don't copy blockTermCount;
+    // it's "transient": used only by the "primary"
+    // termState, and regenerated on seek by TermState
   }
 
   @Override
   public String toString() {
-    return "docFreq=" + docFreq + " totalTermFreq=" + totalTermFreq + " termBlockOrd=" + termBlockOrd + " blockFP=" + blockFilePointer+" "+meta.toString();
+    return "docFreq=" + docFreq + " totalTermFreq=" + totalTermFreq + " termBlockOrd=" + termBlockOrd + " blockFP=" + blockFilePointer;
   }
 }

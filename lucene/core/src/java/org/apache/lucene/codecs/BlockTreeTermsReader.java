@@ -27,7 +27,6 @@ import java.util.Iterator;
 import java.util.Locale;
 import java.util.TreeMap;
 
-import org.apache.lucene.codecs.TermMetaData;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
@@ -93,7 +92,6 @@ public class BlockTreeTermsReader extends FieldsProducer {
   private final IndexInput in;
 
   //private static final boolean DEBUG = BlockTreeTermsWriter.DEBUG;
-  private static final boolean DEBUG = true;
 
   // Reads the terms dict entries, to gather state to
   // produce DocsEnum on demand
@@ -470,9 +468,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
       this.docCount = docCount;
       this.indexStartFP = indexStartFP;
       this.rootCode = rootCode;
-      //if (DEBUG) {
-      //System.out.println("BTTR: seg=" + segment + " field=" + fieldInfo.name + " rootBlockCode=" + rootCode + " divisor=" + indexDivisor);
-      //}
+      // if (DEBUG) {
+      //   System.out.println("BTTR: seg=" + segment + " field=" + fieldInfo.name + " rootBlockCode=" + rootCode + " divisor=" + indexDivisor);
+      // }
 
       rootBlockFP = (new ByteArrayDataInput(rootCode.bytes, rootCode.offset, rootCode.length)).readVLong() >>> BlockTreeTermsWriter.OUTPUT_FLAGS_NUM_BITS;
 
@@ -581,7 +579,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
         long lastSubFP;
 
         // State in automaton
-        int fsaState;
+        int state;
 
         int metaDataUpto;
 
@@ -619,7 +617,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
         FST.Arc<BytesRef> arc;
 
-        final BlockTermState state;
+        final BlockTermState termState;
 
         // Cumulative output so far
         BytesRef outputPrefix;
@@ -629,9 +627,8 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
         public Frame(int ord) throws IOException {
           this.ord = ord;
-          this.state = new BlockTermState();
-          this.state.totalTermFreq = -1;
-          this.state.meta = postingsReader.newMetaData(fieldInfo);
+          termState = postingsReader.newTermState();
+          termState.totalTermFreq = -1;
         }
 
         void loadNextFloorBlock() throws IOException {
@@ -641,22 +638,22 @@ public class BlockTreeTermsReader extends FieldsProducer {
           do {
             fp = fpOrig + (floorDataReader.readVLong() >>> 1);
             numFollowFloorBlocks--;
-            //if (DEBUG) System.out.println("    skip floor block2!  nextFloorLabel=" + (char) nextFloorLabel + " vs target=" + (char) transitions[transitionIndex].getMin() + " newFP=" + fp + " numFollowFloorBlocks=" + numFollowFloorBlocks);
+            // if (DEBUG) System.out.println("    skip floor block2!  nextFloorLabel=" + (char) nextFloorLabel + " vs target=" + (char) transitions[transitionIndex].getMin() + " newFP=" + fp + " numFollowFloorBlocks=" + numFollowFloorBlocks);
             if (numFollowFloorBlocks != 0) {
               nextFloorLabel = floorDataReader.readByte() & 0xff;
             } else {
               nextFloorLabel = 256;
             }
-            //if (DEBUG) System.out.println("    nextFloorLabel=" + (char) nextFloorLabel);
+            // if (DEBUG) System.out.println("    nextFloorLabel=" + (char) nextFloorLabel);
           } while (numFollowFloorBlocks != 0 && nextFloorLabel <= transitions[transitionIndex].getMin());
 
           load(null);
         }
 
-        public void setState(int fsaState) {
-          this.fsaState = fsaState;
+        public void setState(int state) {
+          this.state = state;
           transitionIndex = 0;
-          transitions = compiledAutomaton.sortedTransitions[fsaState];
+          transitions = compiledAutomaton.sortedTransitions[state];
           if (transitions.length != 0) {
             curTransitionMax = transitions[0].getMax();
           } else {
@@ -666,7 +663,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
         void load(BytesRef frameIndexData) throws IOException {
 
-          //if (DEBUG) System.out.println("    load fp=" + fp + " fpOrig=" + fpOrig + " frameIndexData=" + frameIndexData + " trans=" + (transitions.length != 0 ? transitions[0] : "n/a" + " state=" + state));
+          // if (DEBUG) System.out.println("    load fp=" + fp + " fpOrig=" + fpOrig + " frameIndexData=" + frameIndexData + " trans=" + (transitions.length != 0 ? transitions[0] : "n/a" + " state=" + state));
 
           if (frameIndexData != null && transitions.length != 0) {
             // Floor frame
@@ -681,16 +678,16 @@ public class BlockTreeTermsReader extends FieldsProducer {
             if ((code & BlockTreeTermsWriter.OUTPUT_FLAG_IS_FLOOR) != 0) {
               numFollowFloorBlocks = floorDataReader.readVInt();
               nextFloorLabel = floorDataReader.readByte() & 0xff;
-              //if (DEBUG) System.out.println("    numFollowFloorBlocks=" + numFollowFloorBlocks + " nextFloorLabel=" + nextFloorLabel);
+              // if (DEBUG) System.out.println("    numFollowFloorBlocks=" + numFollowFloorBlocks + " nextFloorLabel=" + nextFloorLabel);
 
               // If current state is accept, we must process
               // first block in case it has empty suffix:
-              if (!runAutomaton.isAccept(fsaState)) {
+              if (!runAutomaton.isAccept(state)) {
                 // Maybe skip floor blocks:
                 while (numFollowFloorBlocks != 0 && nextFloorLabel <= transitions[0].getMin()) {
                   fp = fpOrig + (floorDataReader.readVLong() >>> 1);
                   numFollowFloorBlocks--;
-                  //if (DEBUG) System.out.println("    skip floor block!  nextFloorLabel=" + (char) nextFloorLabel + " vs target=" + (char) transitions[0].getMin() + " newFP=" + fp + " numFollowFloorBlocks=" + numFollowFloorBlocks);
+                  // if (DEBUG) System.out.println("    skip floor block!  nextFloorLabel=" + (char) nextFloorLabel + " vs target=" + (char) transitions[0].getMin() + " newFP=" + fp + " numFollowFloorBlocks=" + numFollowFloorBlocks);
                   if (numFollowFloorBlocks != 0) {
                     nextFloorLabel = floorDataReader.readByte() & 0xff;
                   } else {
@@ -711,7 +708,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
           code = in.readVInt();
           isLeafBlock = (code & 1) != 0;
           int numBytes = code >>> 1;
-          //if (DEBUG) System.out.println("      entCount=" + entCount + " lastInFloor?=" + isLastInFloor + " leafBlock?=" + isLeafBlock + " numSuffixBytes=" + numBytes);
+          // if (DEBUG) System.out.println("      entCount=" + entCount + " lastInFloor?=" + isLastInFloor + " leafBlock?=" + isLeafBlock + " numSuffixBytes=" + numBytes);
           if (suffixBytes.length < numBytes) {
             suffixBytes = new byte[ArrayUtil.oversize(numBytes, 1)];
           }
@@ -727,10 +724,10 @@ public class BlockTreeTermsReader extends FieldsProducer {
           statsReader.reset(statBytes, 0, numBytes);
           metaDataUpto = 0;
 
-          state.termBlockOrd = 0;
+          termState.termBlockOrd = 0;
           nextEnt = 0;
           
-          postingsReader.readTermsBlock(in, fieldInfo, state);
+          postingsReader.readTermsBlock(in, fieldInfo, termState);
 
           if (!isLastInFloor) {
             // Sub-blocks of a single floor block are always
@@ -766,7 +763,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
           suffixesReader.skipBytes(suffix);
           if ((code & 1) == 0) {
             // A normal term
-            state.termBlockOrd++;
+            termState.termBlockOrd++;
             return false;
           } else {
             // A sub-block; make sub-FP absolute:
@@ -776,7 +773,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
         }
 
         public int getTermBlockOrd() {
-          return isLeafBlock ? nextEnt : state.termBlockOrd;
+          return isLeafBlock ? nextEnt : termState.termBlockOrd;
         }
 
         public void decodeMetaData() throws IOException {
@@ -787,7 +784,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
           // We must set/incr state.termCount because
           // postings impl can look at this
-          state.termBlockOrd = metaDataUpto;
+          termState.termBlockOrd = metaDataUpto;
       
           // TODO: better API would be "jump straight to term=N"???
           while (metaDataUpto < limit) {
@@ -800,16 +797,16 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
             // TODO: if docFreq were bulk decoded we could
             // just skipN here:
-            state.docFreq = statsReader.readVInt();
+            termState.docFreq = statsReader.readVInt();
             //if (DEBUG) System.out.println("    dF=" + state.docFreq);
             if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
-              state.totalTermFreq = state.docFreq + statsReader.readVLong();
+              termState.totalTermFreq = termState.docFreq + statsReader.readVLong();
               //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
             }
 
-            postingsReader.nextTerm(fieldInfo, state);
+            postingsReader.nextTerm(fieldInfo, termState);
             metaDataUpto++;
-            state.termBlockOrd++;
+            termState.termBlockOrd++;
           }
         }
       }
@@ -819,9 +816,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
       // TODO: in some cases we can filter by length?  eg
       // regexp foo*bar must be at least length 6 bytes
       public IntersectEnum(CompiledAutomaton compiled, BytesRef startTerm) throws IOException {
-        //if (DEBUG) {
-        //System.out.println("\nintEnum.init seg=" + segment + " commonSuffix=" + brToString(compiled.commonSuffixRef));
-        //}
+        // if (DEBUG) {
+        //   System.out.println("\nintEnum.init seg=" + segment + " commonSuffix=" + brToString(compiled.commonSuffixRef));
+        // }
         runAutomaton = compiled.runAutomaton;
         compiledAutomaton = compiled;
         in = BlockTreeTermsReader.this.in.clone();
@@ -875,13 +872,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
       }
 
       @Override
-      // nocommit: currently we fully copy state to upper level
-      // i.e. meta data bytes is also copied, is it necessary?
       public TermState termState() throws IOException {
         currentFrame.decodeMetaData();
-        TermState ts = currentFrame.state.clone();
-        //if (DEBUG) System.out.println("BTTR.termState seg=" + segment + " state=" + ts);
-        return ts;
+        return currentFrame.termState.clone();
       }
 
       private Frame getFrame(int ord) throws IOException {
@@ -915,7 +908,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
         
         f.fp = f.fpOrig = currentFrame.lastSubFP;
         f.prefix = currentFrame.prefix + currentFrame.suffix;
-        //if (DEBUG) System.out.println("    pushFrame state=" + state + " prefix=" + f.prefix);
+        // if (DEBUG) System.out.println("    pushFrame state=" + state + " prefix=" + f.prefix);
         f.setState(state);
 
         // Walk the arc through the index -- we only
@@ -953,20 +946,20 @@ public class BlockTreeTermsReader extends FieldsProducer {
       public int docFreq() throws IOException {
         //if (DEBUG) System.out.println("BTIR.docFreq");
         currentFrame.decodeMetaData();
-        //if (DEBUG) System.out.println("  return " + currentFrame.state.docFreq);
-        return currentFrame.state.docFreq;
+        //if (DEBUG) System.out.println("  return " + currentFrame.termState.docFreq);
+        return currentFrame.termState.docFreq;
       }
 
       @Override
       public long totalTermFreq() throws IOException {
         currentFrame.decodeMetaData();
-        return currentFrame.state.totalTermFreq;
+        return currentFrame.termState.totalTermFreq;
       }
 
       @Override
       public DocsEnum docs(Bits skipDocs, DocsEnum reuse, int flags) throws IOException {
         currentFrame.decodeMetaData();
-        return postingsReader.docs(fieldInfo, currentFrame.state, skipDocs, reuse, flags);
+        return postingsReader.docs(fieldInfo, currentFrame.termState, skipDocs, reuse, flags);
       }
 
       @Override
@@ -977,16 +970,16 @@ public class BlockTreeTermsReader extends FieldsProducer {
         }
 
         currentFrame.decodeMetaData();
-        return postingsReader.docsAndPositions(fieldInfo, currentFrame.state, skipDocs, reuse, flags);
+        return postingsReader.docsAndPositions(fieldInfo, currentFrame.termState, skipDocs, reuse, flags);
       }
 
       private int getState() {
-        int fsaState = currentFrame.fsaState;
+        int state = currentFrame.state;
         for(int idx=0;idx<currentFrame.suffix;idx++) {
-          fsaState = runAutomaton.step(fsaState,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
-          assert fsaState != -1;
+          state = runAutomaton.step(state,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
+          assert state != -1;
         }
-        return fsaState;
+        return state;
       }
 
       // NOTE: specialized to only doing the first-time
@@ -1009,7 +1002,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
             final int saveStartBytePos = currentFrame.startBytePos;
             final int saveSuffix = currentFrame.suffix;
             final long saveLastSubFP = currentFrame.lastSubFP;
-            final int saveTermBlockOrd = currentFrame.state.termBlockOrd;
+            final int saveTermBlockOrd = currentFrame.termState.termBlockOrd;
 
             final boolean isSubBlock = currentFrame.next();
 
@@ -1052,7 +1045,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
                 currentFrame.startBytePos = saveStartBytePos;
                 currentFrame.suffix = saveSuffix;
                 currentFrame.suffixesReader.setPosition(savePos);
-                currentFrame.state.termBlockOrd = saveTermBlockOrd;
+                currentFrame.termState.termBlockOrd = saveTermBlockOrd;
                 System.arraycopy(currentFrame.suffixBytes, currentFrame.startBytePos, term.bytes, currentFrame.prefix, currentFrame.suffix);
                 term.length = currentFrame.prefix + currentFrame.suffix;
                 // If the last entry was a block we don't
@@ -1072,9 +1065,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
       public BytesRef next() throws IOException {
 
         // if (DEBUG) {
-        //System.out.println("\nintEnum.next seg=" + segment);
-        //System.out.println("  frame ord=" + currentFrame.ord + " prefix=" + brToString(new BytesRef(term.bytes, term.offset, currentFrame.prefix)) + " state=" + currentFrame.state + " lastInFloor?=" + currentFrame.isLastInFloor + " fp=" + currentFrame.fp + " trans=" + (currentFrame.transitions.length == 0 ? "n/a" : currentFrame.transitions[currentFrame.transitionIndex]) + " outputPrefix=" + currentFrame.outputPrefix);
-        //}
+        //   System.out.println("\nintEnum.next seg=" + segment);
+        //   System.out.println("  frame ord=" + currentFrame.ord + " prefix=" + brToString(new BytesRef(term.bytes, term.offset, currentFrame.prefix)) + " state=" + currentFrame.state + " lastInFloor?=" + currentFrame.isLastInFloor + " fp=" + currentFrame.fp + " trans=" + (currentFrame.transitions.length == 0 ? "n/a" : currentFrame.transitions[currentFrame.transitionIndex]) + " outputPrefix=" + currentFrame.outputPrefix);
+        // }
 
         nextTerm:
         while(true) {
@@ -1102,8 +1095,8 @@ public class BlockTreeTermsReader extends FieldsProducer {
           //   suffixRef.bytes = currentFrame.suffixBytes;
           //   suffixRef.offset = currentFrame.startBytePos;
           //   suffixRef.length = currentFrame.suffix;
-          //System.out.println("    " + (isSubBlock ? "sub-block" : "term") + " " + currentFrame.nextEnt + " (of " + currentFrame.entCount + ") suffix=" + brToString(suffixRef));
-          //}
+          //   System.out.println("    " + (isSubBlock ? "sub-block" : "term") + " " + currentFrame.nextEnt + " (of " + currentFrame.entCount + ") suffix=" + brToString(suffixRef));
+          // }
 
           if (currentFrame.suffix != 0) {
             final int label = currentFrame.suffixBytes[currentFrame.startBytePos] & 0xff;
@@ -1130,7 +1123,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
             final int termLen = currentFrame.prefix + currentFrame.suffix;
             if (termLen < compiledAutomaton.commonSuffixRef.length) {
               // No match
-              //if (DEBUG) System.out.println("      skip: common suffix length");
+              // if (DEBUG) {
+              //   System.out.println("      skip: common suffix length");
+              // }
               continue nextTerm;
             }
 
@@ -1152,7 +1147,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
               final int termBytesPosEnd = currentFrame.prefix;
               while (termBytesPos < termBytesPosEnd) {
                 if (termBytes[termBytesPos++] != commonSuffixBytes[commonSuffixBytesPos++]) {
-                  //if (DEBUG) System.out.println("      skip: common suffix mismatch (in prefix)");
+                  // if (DEBUG) {
+                  //   System.out.println("      skip: common suffix mismatch (in prefix)");
+                  // }
                   continue nextTerm;
                 }
               }
@@ -1165,7 +1162,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
             final int commonSuffixBytesPosEnd = compiledAutomaton.commonSuffixRef.length;
             while (commonSuffixBytesPos < commonSuffixBytesPosEnd) {
               if (suffixBytes[suffixBytesPos++] != commonSuffixBytes[commonSuffixBytesPos++]) {
-                //if (DEBUG) System.out.println("      skip: common suffix mismatch");
+                // if (DEBUG) {
+                //   System.out.println("      skip: common suffix mismatch");
+                // }
                 continue nextTerm;
               }
             }
@@ -1178,31 +1177,31 @@ public class BlockTreeTermsReader extends FieldsProducer {
           // until the limit
 
           // See if the term prefix matches the automaton:
-          int fsaState = currentFrame.fsaState;
+          int state = currentFrame.state;
           for (int idx=0;idx<currentFrame.suffix;idx++) {
-            fsaState = runAutomaton.step(fsaState,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
-            if (fsaState == -1) {
+            state = runAutomaton.step(state,  currentFrame.suffixBytes[currentFrame.startBytePos+idx] & 0xff);
+            if (state == -1) {
               // No match
-              //System.out.println("    no s=" + fsaState);
+              //System.out.println("    no s=" + state);
               continue nextTerm;
             } else {
-              //System.out.println("    c s=" + fsaState);
+              //System.out.println("    c s=" + state);
             }
           }
 
           if (isSubBlock) {
             // Match!  Recurse:
-            //if (DEBUG) System.out.println("      sub-block match to state=" + fsaState + "; recurse fp=" + currentFrame.lastSubFP);
+            //if (DEBUG) System.out.println("      sub-block match to state=" + state + "; recurse fp=" + currentFrame.lastSubFP);
             copyTerm();
-            currentFrame = pushFrame(fsaState);
-            //if (DEBUG) System.out.println("\n  frame ord=" + currentFrame.ord + " prefix=" + brToString(new BytesRef(term.bytes, term.offset, currentFrame.prefix)) + " state=" + currentFrame.fsaState + " lastInFloor?=" + currentFrame.isLastInFloor + " fp=" + currentFrame.fp + " trans=" + (currentFrame.transitions.length == 0 ? "n/a" : currentFrame.transitions[currentFrame.transitionIndex]) + " outputPrefix=" + currentFrame.outputPrefix);
-          } else if (runAutomaton.isAccept(fsaState)) {
+            currentFrame = pushFrame(state);
+            //if (DEBUG) System.out.println("\n  frame ord=" + currentFrame.ord + " prefix=" + brToString(new BytesRef(term.bytes, term.offset, currentFrame.prefix)) + " state=" + currentFrame.state + " lastInFloor?=" + currentFrame.isLastInFloor + " fp=" + currentFrame.fp + " trans=" + (currentFrame.transitions.length == 0 ? "n/a" : currentFrame.transitions[currentFrame.transitionIndex]) + " outputPrefix=" + currentFrame.outputPrefix);
+          } else if (runAutomaton.isAccept(state)) {
             copyTerm();
-            //if (DEBUG) System.out.println("      term match to state=" + fsaState + "; return term=" + brToString(term));
+            //if (DEBUG) System.out.println("      term match to state=" + state + "; return term=" + brToString(term));
             assert savedStartTerm == null || term.compareTo(savedStartTerm) > 0: "saveStartTerm=" + savedStartTerm.utf8ToString() + " term=" + term.utf8ToString();
             return term;
           } else {
-            //System.out.println("    no s=" + fsaState);
+            //System.out.println("    no s=" + state);
           }
         }
       }
@@ -1300,12 +1299,12 @@ public class BlockTreeTermsReader extends FieldsProducer {
         //currentFrame = pushFrame(arc, rootCode, 0);
         //currentFrame.loadBlock();
         validIndexPrefix = 0;
-        //if (DEBUG) {
-        //System.out.println("init frame state " + currentFrame.ord);
+        // if (DEBUG) {
+        //   System.out.println("init frame state " + currentFrame.ord);
         //   printSeekState();
-        //}
+        // }
 
-        // System.out.println();
+        //System.out.println();
         // computeBlockStats().print(System.out);
       }
       
@@ -1362,7 +1361,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
               final long lastFP = currentFrame.fpOrig;
               currentFrame = stack[currentFrame.ord-1];
               assert lastFP == currentFrame.lastSubFP;
-              //if (DEBUG) System.out.println("  reset validIndexPrefix=" + validIndexPrefix);
+              // if (DEBUG) {
+              //   System.out.println("  reset validIndexPrefix=" + validIndexPrefix);
+              // }
             }
           }
 
@@ -1463,7 +1464,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           if (f.prefix > targetBeforeCurrentLength) {
             f.rewind();
           } else {
-            //if (DEBUG) System.out.println("        skip rewind!");
+            // if (DEBUG) {
+            //   System.out.println("        skip rewind!");
+            // }
           }
           assert length == f.prefix;
         } else {
@@ -1472,12 +1475,12 @@ public class BlockTreeTermsReader extends FieldsProducer {
           f.state.termBlockOrd = 0;
           f.fpOrig = f.fp = fp;
           f.lastSubFP = -1;
-          //if (DEBUG) {
+          // if (DEBUG) {
           //   final int sav = term.length;
           //   term.length = length;
-          //System.out.println("      push new frame ord=" + f.ord + " fp=" + f.fp + " hasTerms=" + f.hasTerms + " isFloor=" + f.isFloor + " pref=" + brToString(term));
+          //   System.out.println("      push new frame ord=" + f.ord + " fp=" + f.fp + " hasTerms=" + f.hasTerms + " isFloor=" + f.isFloor + " pref=" + brToString(term));
           //   term.length = sav;
-          //}
+          // }
         }
 
         return f;
@@ -1508,10 +1511,10 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
         assert clearEOF();
 
-        //if (DEBUG) {
-        //System.out.println("\nBTTR.seekExact seg=" + segment + " target=" + fieldInfo.name + ":" + brToString(target) + " current=" + brToString(term) + " (exists?=" + termExists + ") validIndexPrefix=" + validIndexPrefix);
+        // if (DEBUG) {
+        //   System.out.println("\nBTTR.seekExact seg=" + segment + " target=" + fieldInfo.name + ":" + brToString(target) + " current=" + brToString(term) + " (exists?=" + termExists + ") validIndexPrefix=" + validIndexPrefix);
         //   printSeekState();
-        //}
+        // }
 
         FST.Arc<BytesRef> arc;
         int targetUpto;
@@ -1528,7 +1531,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           // seeks to foobaz, we can re-use the seek state
           // for the first 5 bytes.
 
-          //if (DEBUG) System.out.println("  re-use current seek state validIndexPrefix=" + validIndexPrefix);
+          // if (DEBUG) {
+          //   System.out.println("  re-use current seek state validIndexPrefix=" + validIndexPrefix);
+          // }
 
           arc = arcs[0];
           assert arc.isFinal();
@@ -1548,14 +1553,16 @@ public class BlockTreeTermsReader extends FieldsProducer {
           // First compare up to valid seek frames:
           while (targetUpto < targetLimit) {
             cmp = (term.bytes[targetUpto]&0xFF) - (target.bytes[target.offset + targetUpto]&0xFF);
-            //if (DEBUG) System.out.println("    cycle targetUpto=" + targetUpto + " (vs limit=" + targetLimit + ") cmp=" + cmp + " (targetLabel=" + (char) (target.bytes[target.offset + targetUpto]) + " vs termLabel=" + (char) (term.bytes[targetUpto]) + ")"   + " arc.output=" + arc.output + " output=" + output);
+            // if (DEBUG) {
+            //   System.out.println("    cycle targetUpto=" + targetUpto + " (vs limit=" + targetLimit + ") cmp=" + cmp + " (targetLabel=" + (char) (target.bytes[target.offset + targetUpto]) + " vs termLabel=" + (char) (term.bytes[targetUpto]) + ")"   + " arc.output=" + arc.output + " output=" + output);
+            // }
             if (cmp != 0) {
               break;
             }
             arc = arcs[1+targetUpto];
-            if (arc.label != (target.bytes[target.offset + targetUpto] & 0xFF)) {
+            //if (arc.label != (target.bytes[target.offset + targetUpto] & 0xFF)) {
             //System.out.println("FAIL: arc.label=" + (char) arc.label + " targetLabel=" + (char) (target.bytes[target.offset + targetUpto] & 0xFF));
-            }
+            //}
             assert arc.label == (target.bytes[target.offset + targetUpto] & 0xFF): "arc.label=" + (char) arc.label + " targetLabel=" + (char) (target.bytes[target.offset + targetUpto] & 0xFF);
             if (arc.output != NO_OUTPUT) {
               output = fstOutputs.add(output, arc.output);
@@ -1576,7 +1583,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
             final int targetLimit2 = Math.min(target.length, term.length);
             while (targetUpto < targetLimit2) {
               cmp = (term.bytes[targetUpto]&0xFF) - (target.bytes[target.offset + targetUpto]&0xFF);
-              //if (DEBUG) System.out.println("    cycle2 targetUpto=" + targetUpto + " (vs limit=" + targetLimit + ") cmp=" + cmp + " (targetLabel=" + (char) (target.bytes[target.offset + targetUpto]) + " vs termLabel=" + (char) (term.bytes[targetUpto]) + ")");
+              // if (DEBUG) {
+              //   System.out.println("    cycle2 targetUpto=" + targetUpto + " (vs limit=" + targetLimit + ") cmp=" + cmp + " (targetLabel=" + (char) (target.bytes[target.offset + targetUpto]) + " vs termLabel=" + (char) (term.bytes[targetUpto]) + ")");
+              // }
               if (cmp != 0) {
                 break;
               }
@@ -1593,7 +1602,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
             // Common case: target term is after current
             // term, ie, app is seeking multiple terms
             // in sorted order
-            //if (DEBUG) System.out.println("  target is after current (shares prefixLen=" + targetUpto + "); frame.ord=" + lastFrame.ord);
+            // if (DEBUG) {
+            //   System.out.println("  target is after current (shares prefixLen=" + targetUpto + "); frame.ord=" + lastFrame.ord);
+            // }
             currentFrame = lastFrame;
 
           } else if (cmp > 0) {
@@ -1602,17 +1613,23 @@ public class BlockTreeTermsReader extends FieldsProducer {
             // keep the currentFrame but we must rewind it
             // (so we scan from the start)
             targetBeforeCurrentLength = 0;
-            //if (DEBUG) System.out.println("  target is before current (shares prefixLen=" + targetUpto + "); rewind frame ord=" + lastFrame.ord);
+            // if (DEBUG) {
+            //   System.out.println("  target is before current (shares prefixLen=" + targetUpto + "); rewind frame ord=" + lastFrame.ord);
+            // }
             currentFrame = lastFrame;
             currentFrame.rewind();
           } else {
             // Target is exactly the same as current term
             assert term.length == target.length;
             if (termExists) {
-              //if (DEBUG) System.out.println("  target is same as current; return true");
+              // if (DEBUG) {
+              //   System.out.println("  target is same as current; return true");
+              // }
               return true;
             } else {
-              //if (DEBUG) System.out.println("  target is same as current but term doesn't exist");
+              // if (DEBUG) {
+              //   System.out.println("  target is same as current but term doesn't exist");
+              // }
             }
             //validIndexPrefix = currentFrame.depth;
             //term.length = target.length;
@@ -1628,7 +1645,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           assert arc.isFinal();
           assert arc.output != null;
 
-          //if (DEBUG) System.out.println("    no seek state; push root frame");
+          // if (DEBUG) {
+          //   System.out.println("    no seek state; push root frame");
+          // }
 
           output = arc.output;
 
@@ -1639,7 +1658,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           currentFrame = pushFrame(arc, fstOutputs.add(output, arc.nextFinalOutput), 0);
         }
 
-        //if (DEBUG) System.out.println("  start index loop targetUpto=" + targetUpto + " output=" + output + " currentFrame.ord=" + currentFrame.ord + " targetBeforeCurrentLength=" + targetBeforeCurrentLength);
+        // if (DEBUG) {
+        //   System.out.println("  start index loop targetUpto=" + targetUpto + " output=" + output + " currentFrame.ord=" + currentFrame.ord + " targetBeforeCurrentLength=" + targetBeforeCurrentLength);
+        // }
 
         while (targetUpto < target.length) {
 
@@ -1650,7 +1671,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           if (nextArc == null) {
 
             // Index is exhausted
-            //if (DEBUG) System.out.println("    index: index exhausted label=" + ((char) targetLabel) + " " + toHex(targetLabel));
+            // if (DEBUG) {
+            //   System.out.println("    index: index exhausted label=" + ((char) targetLabel) + " " + toHex(targetLabel));
+            // }
             
             validIndexPrefix = currentFrame.prefix;
             //validIndexPrefix = targetUpto;
@@ -1661,7 +1684,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
               termExists = false;
               term.bytes[targetUpto] = (byte) targetLabel;
               term.length = 1+targetUpto;
-              //if (DEBUG) System.out.println("  FAST NOT_FOUND term=" + brToString(term));
+              // if (DEBUG) {
+              //   System.out.println("  FAST NOT_FOUND term=" + brToString(term));
+              // }
               return false;
             }
 
@@ -1669,10 +1694,14 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
             final SeekStatus result = currentFrame.scanToTerm(target, true);            
             if (result == SeekStatus.FOUND) {
-              //if (DEBUG) System.out.println("  return FOUND term=" + term.utf8ToString() + " " + term);
+              // if (DEBUG) {
+              //   System.out.println("  return FOUND term=" + term.utf8ToString() + " " + term);
+              // }
               return true;
             } else {
-              //if (DEBUG) System.out.println("  got " + result + "; return NOT_FOUND term=" + brToString(term));
+              // if (DEBUG) {
+              //   System.out.println("  got " + result + "; return NOT_FOUND term=" + brToString(term));
+              // }
               return false;
             }
           } else {
@@ -1685,7 +1714,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
               output = fstOutputs.add(output, arc.output);
             }
 
-            //if (DEBUG) System.out.println("    index: follow label=" + toHex(target.bytes[target.offset + targetUpto]&0xff) + " arc.output=" + arc.output + " arc.nfo=" + arc.nextFinalOutput);
+            // if (DEBUG) {
+            //   System.out.println("    index: follow label=" + toHex(target.bytes[target.offset + targetUpto]&0xff) + " arc.output=" + arc.output + " arc.nfo=" + arc.nextFinalOutput);
+            // }
             targetUpto++;
 
             if (arc.isFinal()) {
@@ -1705,7 +1736,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
         if (!currentFrame.hasTerms) {
           termExists = false;
           term.length = targetUpto;
-          //if (DEBUG) System.out.println("  FAST NOT_FOUND term=" + brToString(term));
+          // if (DEBUG) {
+          //   System.out.println("  FAST NOT_FOUND term=" + brToString(term));
+          // }
           return false;
         }
 
@@ -1713,10 +1746,15 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
         final SeekStatus result = currentFrame.scanToTerm(target, true);            
         if (result == SeekStatus.FOUND) {
-          //if (DEBUG) System.out.println("  return FOUND term=" + term.utf8ToString() + " " + term);
+          // if (DEBUG) {
+          //   System.out.println("  return FOUND term=" + term.utf8ToString() + " " + term);
+          // }
           return true;
         } else {
-          //if (DEBUG) System.out.println("  got result " + result + "; return NOT_FOUND term=" + term.utf8ToString());
+          // if (DEBUG) {
+          //   System.out.println("  got result " + result + "; return NOT_FOUND term=" + term.utf8ToString());
+          // }
+
           return false;
         }
       }
@@ -1753,7 +1791,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           // seeks to foobaz, we can re-use the seek state
           // for the first 5 bytes.
 
-          //if (DEBUG) System.out.println("  re-use current seek state validIndexPrefix=" + validIndexPrefix);
+          //if (DEBUG) {
+          //System.out.println("  re-use current seek state validIndexPrefix=" + validIndexPrefix);
+          //}
 
           arc = arcs[0];
           assert arc.isFinal();
@@ -1773,7 +1813,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           // First compare up to valid seek frames:
           while (targetUpto < targetLimit) {
             cmp = (term.bytes[targetUpto]&0xFF) - (target.bytes[target.offset + targetUpto]&0xFF);
-            //if (DEBUG) System.out.println("    cycle targetUpto=" + targetUpto + " (vs limit=" + targetLimit + ") cmp=" + cmp + " (targetLabel=" + (char) (target.bytes[target.offset + targetUpto]) + " vs termLabel=" + (char) (term.bytes[targetUpto]) + ")"   + " arc.output=" + arc.output + " output=" + output);
+            //if (DEBUG) {
+            //System.out.println("    cycle targetUpto=" + targetUpto + " (vs limit=" + targetLimit + ") cmp=" + cmp + " (targetLabel=" + (char) (target.bytes[target.offset + targetUpto]) + " vs termLabel=" + (char) (term.bytes[targetUpto]) + ")"   + " arc.output=" + arc.output + " output=" + output);
+            //}
             if (cmp != 0) {
               break;
             }
@@ -1801,7 +1843,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
             final int targetLimit2 = Math.min(target.length, term.length);
             while (targetUpto < targetLimit2) {
               cmp = (term.bytes[targetUpto]&0xFF) - (target.bytes[target.offset + targetUpto]&0xFF);
-              //if (DEBUG) System.out.println("    cycle2 targetUpto=" + targetUpto + " (vs limit=" + targetLimit + ") cmp=" + cmp + " (targetLabel=" + (char) (target.bytes[target.offset + targetUpto]) + " vs termLabel=" + (char) (term.bytes[targetUpto]) + ")");
+              //if (DEBUG) {
+              //System.out.println("    cycle2 targetUpto=" + targetUpto + " (vs limit=" + targetLimit + ") cmp=" + cmp + " (targetLabel=" + (char) (target.bytes[target.offset + targetUpto]) + " vs termLabel=" + (char) (term.bytes[targetUpto]) + ")");
+              //}
               if (cmp != 0) {
                 break;
               }
@@ -1818,7 +1862,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
             // Common case: target term is after current
             // term, ie, app is seeking multiple terms
             // in sorted order
-            //if (DEBUG) System.out.println("  target is after current (shares prefixLen=" + targetUpto + "); clear frame.scanned ord=" + lastFrame.ord);
+            //if (DEBUG) {
+            //System.out.println("  target is after current (shares prefixLen=" + targetUpto + "); clear frame.scanned ord=" + lastFrame.ord);
+            //}
             currentFrame = lastFrame;
 
           } else if (cmp > 0) {
@@ -1827,17 +1873,23 @@ public class BlockTreeTermsReader extends FieldsProducer {
             // keep the currentFrame but we must rewind it
             // (so we scan from the start)
             targetBeforeCurrentLength = 0;
-            //if (DEBUG) System.out.println("  target is before current (shares prefixLen=" + targetUpto + "); rewind frame ord=" + lastFrame.ord);
+            //if (DEBUG) {
+            //System.out.println("  target is before current (shares prefixLen=" + targetUpto + "); rewind frame ord=" + lastFrame.ord);
+            //}
             currentFrame = lastFrame;
             currentFrame.rewind();
           } else {
             // Target is exactly the same as current term
             assert term.length == target.length;
             if (termExists) {
-              //if (DEBUG) System.out.println("  target is same as current; return FOUND");
+              //if (DEBUG) {
+              //System.out.println("  target is same as current; return FOUND");
+              //}
               return SeekStatus.FOUND;
             } else {
-              //if (DEBUG) System.out.println("  target is same as current but term doesn't exist");
+              //if (DEBUG) {
+              //System.out.println("  target is same as current but term doesn't exist");
+              //}
             }
           }
 
@@ -1850,7 +1902,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           assert arc.isFinal();
           assert arc.output != null;
 
-          //if (DEBUG) System.out.println("    no seek state; push root frame");
+          //if (DEBUG) {
+          //System.out.println("    no seek state; push root frame");
+          //}
 
           output = arc.output;
 
@@ -1861,7 +1915,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           currentFrame = pushFrame(arc, fstOutputs.add(output, arc.nextFinalOutput), 0);
         }
 
-        //if (DEBUG) System.out.println("  start index loop targetUpto=" + targetUpto + " output=" + output + " currentFrame.ord+1=" + currentFrame.ord + " targetBeforeCurrentLength=" + targetBeforeCurrentLength);
+        //if (DEBUG) {
+        //System.out.println("  start index loop targetUpto=" + targetUpto + " output=" + output + " currentFrame.ord+1=" + currentFrame.ord + " targetBeforeCurrentLength=" + targetBeforeCurrentLength);
+        //}
 
         while (targetUpto < target.length) {
 
@@ -1872,7 +1928,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           if (nextArc == null) {
 
             // Index is exhausted
-            //if (DEBUG) System.out.println("    index: index exhausted label=" + ((char) targetLabel) + " " + toHex(targetLabel));
+            // if (DEBUG) {
+            //   System.out.println("    index: index exhausted label=" + ((char) targetLabel) + " " + toHex(targetLabel));
+            // }
             
             validIndexPrefix = currentFrame.prefix;
             //validIndexPrefix = targetUpto;
@@ -1887,14 +1945,20 @@ public class BlockTreeTermsReader extends FieldsProducer {
               termExists = false;
 
               if (next() != null) {
-                //if (DEBUG) System.out.println("  return NOT_FOUND term=" + brToString(term) + " " + term);
+                //if (DEBUG) {
+                //System.out.println("  return NOT_FOUND term=" + brToString(term) + " " + term);
+                //}
                 return SeekStatus.NOT_FOUND;
               } else {
-                //if (DEBUG) System.out.println("  return END");
+                //if (DEBUG) {
+                //System.out.println("  return END");
+                //}
                 return SeekStatus.END;
               }
             } else {
-              //if (DEBUG) System.out.println("  return " + result + " term=" + brToString(term) + " " + term);
+              //if (DEBUG) {
+              //System.out.println("  return " + result + " term=" + brToString(term) + " " + term);
+              //}
               return result;
             }
           } else {
@@ -1907,7 +1971,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
               output = fstOutputs.add(output, arc.output);
             }
 
-            //if (DEBUG) System.out.println("    index: follow label=" + toHex(target.bytes[target.offset + targetUpto]&0xff) + " arc.output=" + arc.output + " arc.nfo=" + arc.nextFinalOutput);
+            //if (DEBUG) {
+            //System.out.println("    index: follow label=" + toHex(target.bytes[target.offset + targetUpto]&0xff) + " arc.output=" + arc.output + " arc.nfo=" + arc.nextFinalOutput);
+            //}
             targetUpto++;
 
             if (arc.isFinal()) {
@@ -1931,10 +1997,14 @@ public class BlockTreeTermsReader extends FieldsProducer {
           term.copyBytes(target);
           termExists = false;
           if (next() != null) {
-            //if (DEBUG) System.out.println("  return NOT_FOUND term=" + term.utf8ToString() + " " + term);
+            //if (DEBUG) {
+            //System.out.println("  return NOT_FOUND term=" + term.utf8ToString() + " " + term);
+            //}
             return SeekStatus.NOT_FOUND;
           } else {
-            //if (DEBUG) System.out.println("  return END");
+            //if (DEBUG) {
+            //System.out.println("  return END");
+            //}
             return SeekStatus.END;
           }
         } else {
@@ -2059,7 +2129,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
             // Note that the seek state (last seek) has been
             // invalidated beyond this depth
             validIndexPrefix = Math.min(validIndexPrefix, currentFrame.prefix);
-            //if (DEBUG) System.out.println("  reset validIndexPrefix=" + validIndexPrefix);
+            //if (DEBUG) {
+            //System.out.println("  reset validIndexPrefix=" + validIndexPrefix);
+            //}
           }
         }
 
@@ -2106,9 +2178,13 @@ public class BlockTreeTermsReader extends FieldsProducer {
       @Override
       public DocsEnum docs(Bits skipDocs, DocsEnum reuse, int flags) throws IOException {
         assert !eof;
-        //if (DEBUG) System.out.println("BTTR.docs seg=" + segment);
+        //if (DEBUG) {
+        //System.out.println("BTTR.docs seg=" + segment);
+        //}
         currentFrame.decodeMetaData();
-        //if (DEBUG) System.out.println("  state=" + currentFrame.state);
+        //if (DEBUG) {
+        //System.out.println("  state=" + currentFrame.state);
+        //}
         return postingsReader.docs(fieldInfo, currentFrame.state, skipDocs, reuse, flags);
       }
 
@@ -2126,7 +2202,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
       @Override
       public void seekExact(BytesRef target, TermState otherState) {
-        //if (DEBUG) System.out.println("BTTR.seekExact termState seg=" + segment + " target=" + target.utf8ToString() + " " + target + " state=" + otherState);
+        // if (DEBUG) {
+        //   System.out.println("BTTR.seekExact termState seg=" + segment + " target=" + target.utf8ToString() + " " + target + " state=" + otherState);
+        // }
         assert clearEOF();
         if (target.compareTo(term) != 0 || !termExists) {
           assert otherState != null && otherState instanceof BlockTermState;
@@ -2137,7 +2215,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           assert currentFrame.metaDataUpto > 0;
           validIndexPrefix = 0;
         } else {
-          //if (DEBUG) System.out.println("  skip seek: already on target state=" + currentFrame.state);
+          // if (DEBUG) {
+          //   System.out.println("  skip seek: already on target state=" + currentFrame.state);
+          // }
         }
       }
       
@@ -2219,9 +2299,8 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
         public Frame(int ord) throws IOException {
           this.ord = ord;
-          this.state = new BlockTermState();
-          this.state.totalTermFreq = -1;
-          this.state.meta = postingsReader.newMetaData(fieldInfo);
+          state = postingsReader.newTermState();
+          state.totalTermFreq = -1;
         }
 
         public void setFloorData(ByteArrayDataInput in, BytesRef source) {
@@ -2233,7 +2312,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           floorDataReader.reset(floorData, 0, numBytes);
           numFollowFloorBlocks = floorDataReader.readVInt();
           nextFloorLabel = floorDataReader.readByte() & 0xff;
-          //if (DEBUG) System.out.println("    setFloorData fpOrig=" + fpOrig + " bytes=" + new BytesRef(source.bytes, source.offset + in.getPosition(), numBytes) + " numFollowFloorBlocks=" + numFollowFloorBlocks + " nextFloorLabel=" + toHex(nextFloorLabel));
+          //if (DEBUG) {
+          //System.out.println("    setFloorData fpOrig=" + fpOrig + " bytes=" + new BytesRef(source.bytes, source.offset + in.getPosition(), numBytes) + " numFollowFloorBlocks=" + numFollowFloorBlocks + " nextFloorLabel=" + toHex(nextFloorLabel));
+          //}
         }
 
         public int getTermBlockOrd() {
@@ -2241,7 +2322,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
         }
 
         void loadNextFloorBlock() throws IOException {
-          //if (DEBUG) System.out.println("    loadNextFloorBlock fp=" + fp + " fpEnd=" + fpEnd);
+          //if (DEBUG) {
+          //System.out.println("    loadNextFloorBlock fp=" + fp + " fpEnd=" + fpEnd);
+          //}
           assert arc == null || isFloor: "arc=" + arc + " isFloor=" + isFloor;
           fp = fpEnd;
           nextEnt = -1;
@@ -2320,7 +2403,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
           // Sub-blocks of a single floor block are always
           // written one after another -- tail recurse:
           fpEnd = in.getFilePointer();
-          //if (DEBUG) System.out.println("      fpEnd=" + fpEnd);
+          // if (DEBUG) {
+          //   System.out.println("      fpEnd=" + fpEnd);
+          // }
         }
 
         void rewind() {
@@ -2336,7 +2421,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
           }
 
           /*
-          System.out.println("rewind");
+          //System.out.println("rewind");
           // Keeps the block loaded, but rewinds its state:
           if (nextEnt > 0 || fp != fpOrig) {
             if (DEBUG) {
@@ -2414,7 +2499,9 @@ public class BlockTreeTermsReader extends FieldsProducer {
             termExists = false;
             subCode = suffixesReader.readVLong();
             lastSubFP = fp - subCode;
-            //if (DEBUG) System.out.println("    lastSubFP=" + lastSubFP);
+            //if (DEBUG) {
+            //System.out.println("    lastSubFP=" + lastSubFP);
+            //}
             return true;
           }
         }
@@ -2425,16 +2512,22 @@ public class BlockTreeTermsReader extends FieldsProducer {
         public void scanToFloorFrame(BytesRef target) {
 
           if (!isFloor || target.length <= prefix) {
-            //if (DEBUG) System.out.println("    scanToFloorFrame skip: isFloor=" + isFloor + " target.length=" + target.length + " vs prefix=" + prefix);
+            // if (DEBUG) {
+            //   System.out.println("    scanToFloorFrame skip: isFloor=" + isFloor + " target.length=" + target.length + " vs prefix=" + prefix);
+            // }
             return;
           }
 
           final int targetLabel = target.bytes[target.offset + prefix] & 0xFF;
 
-          //if (DEBUG) System.out.println("    scanToFloorFrame fpOrig=" + fpOrig + " targetLabel=" + toHex(targetLabel) + " vs nextFloorLabel=" + toHex(nextFloorLabel) + " numFollowFloorBlocks=" + numFollowFloorBlocks);
+          // if (DEBUG) {
+          //   System.out.println("    scanToFloorFrame fpOrig=" + fpOrig + " targetLabel=" + toHex(targetLabel) + " vs nextFloorLabel=" + toHex(nextFloorLabel) + " numFollowFloorBlocks=" + numFollowFloorBlocks);
+          // }
 
           if (targetLabel < nextFloorLabel) {
-            //if (DEBUG) System.out.println("      already on correct block");
+            // if (DEBUG) {
+            //   System.out.println("      already on correct block");
+            // }
             return;
           }
 
@@ -2445,19 +2538,25 @@ public class BlockTreeTermsReader extends FieldsProducer {
             final long code = floorDataReader.readVLong();
             newFP = fpOrig + (code >>> 1);
             hasTerms = (code & 1) != 0;
-            //if (DEBUG) System.out.println("      label=" + toHex(nextFloorLabel) + " fp=" + newFP + " hasTerms?=" + hasTerms + " numFollowFloor=" + numFollowFloorBlocks);
+            // if (DEBUG) {
+            //   System.out.println("      label=" + toHex(nextFloorLabel) + " fp=" + newFP + " hasTerms?=" + hasTerms + " numFollowFloor=" + numFollowFloorBlocks);
+            // }
             
             isLastInFloor = numFollowFloorBlocks == 1;
             numFollowFloorBlocks--;
 
             if (isLastInFloor) {
               nextFloorLabel = 256;
-              //if (DEBUG) System.out.println("        stop!  last block nextFloorLabel=" + toHex(nextFloorLabel));
+              // if (DEBUG) {
+              //   System.out.println("        stop!  last block nextFloorLabel=" + toHex(nextFloorLabel));
+              // }
               break;
             } else {
               nextFloorLabel = floorDataReader.readByte() & 0xff;
               if (targetLabel < nextFloorLabel) {
-                //if (DEBUG) System.out.println("        stop!  nextFloorLabel=" + toHex(nextFloorLabel));
+                // if (DEBUG) {
+                //   System.out.println("        stop!  nextFloorLabel=" + toHex(nextFloorLabel));
+                // }
                 break;
               }
             }
@@ -2465,11 +2564,15 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
           if (newFP != fp) {
             // Force re-load of the block:
-            //if (DEBUG) System.out.println("      force switch to fp=" + newFP + " oldFP=" + fp);
+            // if (DEBUG) {
+            //   System.out.println("      force switch to fp=" + newFP + " oldFP=" + fp);
+            // }
             nextEnt = -1;
             fp = newFP;
           } else {
-            //if (DEBUG) System.out.println("      stay on same fp=" + newFP);
+            // if (DEBUG) {
+            //   System.out.println("      stay on same fp=" + newFP);
+            // }
           }
         }
     
@@ -2567,7 +2670,7 @@ public class BlockTreeTermsReader extends FieldsProducer {
         // scan the entries check if the suffix matches.
         public SeekStatus scanToTermLeaf(BytesRef target, boolean exactOnly) throws IOException {
 
-          //if (DEBUG) System.out.println("    scanToTermLeaf: block fp=" + fp + " prefix=" + prefix + " nextEnt=" + nextEnt + " (of " + entCount + ") target=" + brToString(target) + " term=" + brToString(term));
+          // if (DEBUG) System.out.println("    scanToTermLeaf: block fp=" + fp + " prefix=" + prefix + " nextEnt=" + nextEnt + " (of " + entCount + ") target=" + brToString(target) + " term=" + brToString(term));
 
           assert nextEnt != -1;
 
@@ -2590,13 +2693,13 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
             suffix = suffixesReader.readVInt();
 
-            //if (DEBUG) {
+            // if (DEBUG) {
             //   BytesRef suffixBytesRef = new BytesRef();
             //   suffixBytesRef.bytes = suffixBytes;
             //   suffixBytesRef.offset = suffixesReader.getPosition();
             //   suffixBytesRef.length = suffix;
-            //System.out.println("      cycle: term " + (nextEnt-1) + " (of " + entCount + ") suffix=" + brToString(suffixBytesRef));
-            //}
+            //   System.out.println("      cycle: term " + (nextEnt-1) + " (of " + entCount + ") suffix=" + brToString(suffixBytesRef));
+            // }
 
             final int termLen = prefix + suffix;
             startBytePos = suffixesReader.getPosition();
@@ -2714,13 +2817,13 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
             final int code = suffixesReader.readVInt();
             suffix = code >>> 1;
-            //if (DEBUG) {
+            // if (DEBUG) {
             //   BytesRef suffixBytesRef = new BytesRef();
             //   suffixBytesRef.bytes = suffixBytes;
             //   suffixBytesRef.offset = suffixesReader.getPosition();
             //   suffixBytesRef.length = suffix;
-            //System.out.println("      cycle: " + ((code&1)==1 ? "sub-block" : "term") + " " + (nextEnt-1) + " (of " + entCount + ") suffix=" + brToString(suffixBytesRef));
-            //}
+            //   System.out.println("      cycle: " + ((code&1)==1 ? "sub-block" : "term") + " " + (nextEnt-1) + " (of " + entCount + ") suffix=" + brToString(suffixBytesRef));
+            // }
 
             termExists = (code & 1) == 0;
             final int termLen = prefix + suffix;

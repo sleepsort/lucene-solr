@@ -27,15 +27,14 @@ import java.util.Arrays;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.PostingsReaderBase;
-import org.apache.lucene.codecs.TermMetaData;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.IndexFileNames;
-import org.apache.lucene.index.TermState;
 import org.apache.lucene.index.SegmentInfo;
+import org.apache.lucene.index.TermState;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.Directory;
@@ -142,9 +141,55 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
     }
   }
 
+  // Must keep final because we do non-standard clone
+  private final static class IntBlockTermState extends BlockTermState {
+    long docStartFP;
+    long posStartFP;
+    long payStartFP;
+    long skipOffset;
+    long lastPosBlockOffset;
+    // docid when there is a single pulsed posting, otherwise -1
+    // freq is always implicitly totalTermFreq in this case.
+    int singletonDocID;
+
+    // Only used by the "primary" TermState -- clones don't
+    // copy this (basically they are "transient"):
+    ByteArrayDataInput bytesReader;  // TODO: should this NOT be in the TermState...?
+    byte[] bytes;
+
+    @Override
+    public IntBlockTermState clone() {
+      IntBlockTermState other = new IntBlockTermState();
+      other.copyFrom(this);
+      return other;
+    }
+
+    @Override
+    public void copyFrom(TermState _other) {
+      super.copyFrom(_other);
+      IntBlockTermState other = (IntBlockTermState) _other;
+      docStartFP = other.docStartFP;
+      posStartFP = other.posStartFP;
+      payStartFP = other.payStartFP;
+      lastPosBlockOffset = other.lastPosBlockOffset;
+      skipOffset = other.skipOffset;
+      singletonDocID = other.singletonDocID;
+
+      // Do not copy bytes, bytesReader (else TermState is
+      // very heavy, ie drags around the entire block's
+      // byte[]).  On seek back, if next() is in fact used
+      // (rare!), they will be re-read from disk.
+    }
+
+    @Override
+    public String toString() {
+      return super.toString() + " docStartFP=" + docStartFP + " posStartFP=" + posStartFP + " payStartFP=" + payStartFP + " lastPosBlockOffset=" + lastPosBlockOffset + " singletonDocID=" + singletonDocID;
+    }
+  }
+
   @Override
-  public TermMetaData newMetaData(FieldInfo info) {
-    return new Lucene41MetaData(info);
+  public IntBlockTermState newTermState() {
+    return new IntBlockTermState();
   }
 
   @Override
@@ -155,87 +200,87 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
   /* Reads but does not decode the byte[] blob holding
      metadata for the current terms block */
   @Override
-  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, BlockTermState state) throws IOException {
-    final Lucene41MetaData meta= (Lucene41MetaData) state.meta;
+  public void readTermsBlock(IndexInput termsIn, FieldInfo fieldInfo, BlockTermState _termState) throws IOException {
+    final IntBlockTermState termState = (IntBlockTermState) _termState;
 
     final int numBytes = termsIn.readVInt();
 
-    if (meta.bytes == null) {
-      meta.bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
-      meta.bytesReader = new ByteArrayDataInput();
-    } else if (meta.bytes.length < numBytes) {
-      meta.bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
+    if (termState.bytes == null) {
+      termState.bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
+      termState.bytesReader = new ByteArrayDataInput();
+    } else if (termState.bytes.length < numBytes) {
+      termState.bytes = new byte[ArrayUtil.oversize(numBytes, 1)];
     }
 
-    termsIn.readBytes(meta.bytes, 0, numBytes);
-    meta.bytesReader.reset(meta.bytes, 0, numBytes);
+    termsIn.readBytes(termState.bytes, 0, numBytes);
+    termState.bytesReader.reset(termState.bytes, 0, numBytes);
   }
 
   @Override
-  public void nextTerm(FieldInfo fieldInfo, BlockTermState state)
+  public void nextTerm(FieldInfo fieldInfo, BlockTermState _termState)
     throws IOException {
-    final Lucene41MetaData meta= (Lucene41MetaData) state.meta;
-    final boolean isFirstTerm = state.termBlockOrd == 0;
+    final IntBlockTermState termState = (IntBlockTermState) _termState;
+    final boolean isFirstTerm = termState.termBlockOrd == 0;
     final boolean fieldHasPositions = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
     final boolean fieldHasOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
     final boolean fieldHasPayloads = fieldInfo.hasPayloads();
 
-    final DataInput in = meta.bytesReader;
+    final DataInput in = termState.bytesReader;
     if (isFirstTerm) {
-      if (state.docFreq == 1) {
-        meta.setSingletonDocID(in.readVInt());
-        meta.setDocFP(0);
+      if (termState.docFreq == 1) {
+        termState.singletonDocID = in.readVInt();
+        termState.docStartFP = 0;
       } else {
-        meta.setSingletonDocID(-1);
-        meta.setDocFP(in.readVLong());
+        termState.singletonDocID = -1;
+        termState.docStartFP = in.readVLong();
       }
       if (fieldHasPositions) {
-        meta.setPosFP(in.readVLong());
-        if (state.totalTermFreq > BLOCK_SIZE) {
-          meta.setLastPosBlockOffset(in.readVLong());
+        termState.posStartFP = in.readVLong();
+        if (termState.totalTermFreq > BLOCK_SIZE) {
+          termState.lastPosBlockOffset = in.readVLong();
         } else {
-          meta.setLastPosBlockOffset(-1);
+          termState.lastPosBlockOffset = -1;
         }
-        if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
-          meta.setPayFP(in.readVLong());
+        if ((fieldHasPayloads || fieldHasOffsets) && termState.totalTermFreq >= BLOCK_SIZE) {
+          termState.payStartFP = in.readVLong();
         } else {
-          meta.setPayFP(-1);
+          termState.payStartFP = -1;
         }
       }
     } else {
-      if (state.docFreq == 1) {
-        meta.setSingletonDocID(in.readVInt());
+      if (termState.docFreq == 1) {
+        termState.singletonDocID = in.readVInt();
       } else {
-        meta.setSingletonDocID(-1);
-        meta.setDocFP(meta.docFP() + in.readVLong());
+        termState.singletonDocID = -1;
+        termState.docStartFP += in.readVLong();
       }
       if (fieldHasPositions) {
-        meta.setPosFP(meta.posFP() + in.readVLong());
-        if (state.totalTermFreq > BLOCK_SIZE) {
-          meta.setLastPosBlockOffset(in.readVLong());
+        termState.posStartFP += in.readVLong();
+        if (termState.totalTermFreq > BLOCK_SIZE) {
+          termState.lastPosBlockOffset = in.readVLong();
         } else {
-          meta.setLastPosBlockOffset(-1);
+          termState.lastPosBlockOffset = -1;
         }
-        if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
+        if ((fieldHasPayloads || fieldHasOffsets) && termState.totalTermFreq >= BLOCK_SIZE) {
           long delta = in.readVLong();
-          if (meta.payFP() == -1) {
-            meta.setPayFP(delta);
+          if (termState.payStartFP == -1) {
+            termState.payStartFP = delta;
           } else {
-            meta.setPayFP(meta.payFP() + delta);
+            termState.payStartFP += delta;
           }
         }
       }
     }
 
-    if (state.docFreq > BLOCK_SIZE) {
-      meta.setSkipOffset(in.readVLong());
+    if (termState.docFreq > BLOCK_SIZE) {
+      termState.skipOffset = in.readVLong();
     } else {
-      meta.setSkipOffset(-1);
+      termState.skipOffset = -1;
     }
   }
     
   @Override
-  public DocsEnum docs(FieldInfo fieldInfo, BlockTermState state, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
+  public DocsEnum docs(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
     BlockDocsEnum docsEnum;
     if (reuse instanceof BlockDocsEnum) {
       docsEnum = (BlockDocsEnum) reuse;
@@ -245,13 +290,13 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
     } else {
       docsEnum = new BlockDocsEnum(fieldInfo);
     }
-    return docsEnum.reset(liveDocs, state, flags);
+    return docsEnum.reset(liveDocs, (IntBlockTermState) termState, flags);
   }
 
   // TODO: specialize to liveDocs vs not
   
   @Override
-  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, BlockTermState state, Bits liveDocs,
+  public DocsAndPositionsEnum docsAndPositions(FieldInfo fieldInfo, BlockTermState termState, Bits liveDocs,
                                                DocsAndPositionsEnum reuse, int flags)
     throws IOException {
 
@@ -269,7 +314,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
       } else {
         docsAndPositionsEnum = new BlockDocsAndPositionsEnum(fieldInfo);
       }
-      return docsAndPositionsEnum.reset(liveDocs, state);
+      return docsAndPositionsEnum.reset(liveDocs, (IntBlockTermState) termState);
     } else {
       EverythingEnum everythingEnum;
       if (reuse instanceof EverythingEnum) {
@@ -280,7 +325,7 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
       } else {
         everythingEnum = new EverythingEnum(fieldInfo);
       }
-      return everythingEnum.reset(liveDocs, state, flags);
+      return everythingEnum.reset(liveDocs, (IntBlockTermState) termState, flags);
     }
   }
 
@@ -344,17 +389,16 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
         indexHasPayloads == fieldInfo.hasPayloads();
     }
     
-    public DocsEnum reset(Bits liveDocs, BlockTermState state, int flags) throws IOException {
-      final Lucene41MetaData meta = (Lucene41MetaData) state.meta;
+    public DocsEnum reset(Bits liveDocs, IntBlockTermState termState, int flags) throws IOException {
       this.liveDocs = liveDocs;
       // if (DEBUG) {
-      //   System.out.println("  FPR.reset: state=" + state);
+      //   System.out.println("  FPR.reset: termState=" + termState);
       // }
-      docFreq = state.docFreq;
-      totalTermFreq = indexHasFreq ? state.totalTermFreq : docFreq;
-      docTermStartFP = meta.docFP();
-      skipOffset = meta.skipOffset();
-      singletonDocID = meta.singletonDocID();
+      docFreq = termState.docFreq;
+      totalTermFreq = indexHasFreq ? termState.totalTermFreq : docFreq;
+      docTermStartFP = termState.docStartFP;
+      skipOffset = termState.skipOffset;
+      singletonDocID = termState.singletonDocID;
       if (docFreq > 1) {
         if (docIn == null) {
           // lazy init
@@ -641,19 +685,18 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
         indexHasPayloads == fieldInfo.hasPayloads();
     }
     
-    public DocsAndPositionsEnum reset(Bits liveDocs, BlockTermState state) throws IOException {
-      final Lucene41MetaData meta = (Lucene41MetaData) state.meta;
+    public DocsAndPositionsEnum reset(Bits liveDocs, IntBlockTermState termState) throws IOException {
       this.liveDocs = liveDocs;
       // if (DEBUG) {
-      //   System.out.println("  FPR.reset: state=" + state);
+      //   System.out.println("  FPR.reset: termState=" + termState);
       // }
-      docFreq = state.docFreq;
-      totalTermFreq = state.totalTermFreq;
-      docTermStartFP = meta.docFP();
-      posTermStartFP = meta.posFP();
-      payTermStartFP = meta.payFP();
-      skipOffset = meta.skipOffset();
-      singletonDocID = meta.singletonDocID();
+      docFreq = termState.docFreq;
+      docTermStartFP = termState.docStartFP;
+      posTermStartFP = termState.posStartFP;
+      payTermStartFP = termState.payStartFP;
+      skipOffset = termState.skipOffset;
+      totalTermFreq = termState.totalTermFreq;
+      singletonDocID = termState.singletonDocID;
       if (docFreq > 1) {
         if (docIn == null) {
           // lazy init
@@ -663,12 +706,12 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
       }
       posPendingFP = posTermStartFP;
       posPendingCount = 0;
-      if (state.totalTermFreq < BLOCK_SIZE) {
+      if (termState.totalTermFreq < BLOCK_SIZE) {
         lastPosBlockFP = posTermStartFP;
-      } else if (state.totalTermFreq == BLOCK_SIZE) {
+      } else if (termState.totalTermFreq == BLOCK_SIZE) {
         lastPosBlockFP = -1;
       } else {
-        lastPosBlockFP = posTermStartFP + meta.lastPosBlockOffset();
+        lastPosBlockFP = posTermStartFP + termState.lastPosBlockOffset;
       }
 
       doc = -1;
@@ -1099,19 +1142,18 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
         indexHasPayloads == fieldInfo.hasPayloads();
     }
     
-    public EverythingEnum reset(Bits liveDocs, BlockTermState state, int flags) throws IOException {
-      final Lucene41MetaData meta = (Lucene41MetaData) state.meta;
+    public EverythingEnum reset(Bits liveDocs, IntBlockTermState termState, int flags) throws IOException {
       this.liveDocs = liveDocs;
       // if (DEBUG) {
-      //   System.out.println("  FPR.reset: state=" + state);
+      //   System.out.println("  FPR.reset: termState=" + termState);
       // }
-      docFreq = state.docFreq;
-      totalTermFreq = state.totalTermFreq;
-      docTermStartFP = meta.docFP();
-      posTermStartFP = meta.posFP();
-      payTermStartFP = meta.payFP();
-      skipOffset = meta.skipOffset();
-      singletonDocID = meta.singletonDocID();
+      docFreq = termState.docFreq;
+      docTermStartFP = termState.docStartFP;
+      posTermStartFP = termState.posStartFP;
+      payTermStartFP = termState.payStartFP;
+      skipOffset = termState.skipOffset;
+      totalTermFreq = termState.totalTermFreq;
+      singletonDocID = termState.singletonDocID;
       if (docFreq > 1) {
         if (docIn == null) {
           // lazy init
@@ -1122,12 +1164,12 @@ public final class Lucene41PostingsReader extends PostingsReaderBase {
       posPendingFP = posTermStartFP;
       payPendingFP = payTermStartFP;
       posPendingCount = 0;
-      if (state.totalTermFreq < BLOCK_SIZE) {
+      if (termState.totalTermFreq < BLOCK_SIZE) {
         lastPosBlockFP = posTermStartFP;
-      } else if (state.totalTermFreq == BLOCK_SIZE) {
+      } else if (termState.totalTermFreq == BLOCK_SIZE) {
         lastPosBlockFP = -1;
       } else {
-        lastPosBlockFP = posTermStartFP + meta.lastPosBlockOffset();
+        lastPosBlockFP = posTermStartFP + termState.lastPosBlockOffset;
       }
 
       this.needsOffsets = (flags & DocsAndPositionsEnum.FLAG_OFFSETS) != 0;

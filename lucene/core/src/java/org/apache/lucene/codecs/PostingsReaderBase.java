@@ -52,7 +52,7 @@ public abstract class PostingsReaderBase implements Closeable {
   public abstract void init(IndexInput termsIn) throws IOException;
 
   /** Return a newly created empty TermState */
-  public abstract TermMetaData newMetaData(FieldInfo info) throws IOException;
+  public abstract BlockTermState newTermState() throws IOException;
 
   /** Actually decode metadata for next term */
   public abstract void nextTerm(FieldInfo fieldInfo, BlockTermState state) throws IOException;
