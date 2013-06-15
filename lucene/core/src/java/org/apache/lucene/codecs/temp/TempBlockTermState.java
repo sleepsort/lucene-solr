@@ -35,6 +35,7 @@ public class TempBlockTermState extends TempTermState {
   @Override
   public void copyFrom(TermState _other) {
     assert _other instanceof TempBlockTermState : "can not copy from " + _other.getClass().getName();
+    super.copyFrom(_other);
     TempBlockTermState other = (TempBlockTermState) _other;
     termBlockOrd = other.termBlockOrd;
   }
