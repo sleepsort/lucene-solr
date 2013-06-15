@@ -957,6 +957,8 @@ public class TempBlockTermsWriter extends FieldsConsumer {
 
       return new PendingBlock(prefix, startFP, termCount != 0, isFloor, floorLeadByte, subIndices);
     }
+
+    // nocommit-noise: ok we're abusing this naming
     private final RAMOutputStream bytesWriter3 = new RAMOutputStream();
 
     /** Flush count terms starting at start "backwards", as a
@@ -978,13 +980,11 @@ public class TempBlockTermsWriter extends FieldsConsumer {
       last = postingsWriter.newTermMetaData();
       for(int idx=limit-count; idx<limit; idx++) {
         upto = pendingMetaData.get(idx);
-        // nocommit: wow ... FP is smaller than 
+        // nocommit-noise: wow ... FP is smaller than 
         // latest trunk version... somebody optimized the PF?
         delta = upto.subtract(last);
         delta.write(bytesWriter3, fieldInfo, null);
-        // nocommit: last = upto ? sadly no... 
-        // With terms A, B, C, lastDocFP[C] == docFP[A], if docFP[B] == -1
-        last = delta.add(last);
+        last = upto.pad(last);
       }
       out.writeVInt((int) bytesWriter3.getFilePointer());
       bytesWriter3.writeTo(out);

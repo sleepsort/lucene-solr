@@ -39,11 +39,19 @@ public abstract class TermMetaData implements Cloneable {
   }
   public abstract void copyFrom(TermMetaData other);
 
-  /* return (this - smaller), if possible */
-  public abstract TermMetaData subtract(TermMetaData inc);
+  /* return a cloned instance,
+   * for monotonic fields, the values are (this - dec) */
+  public abstract TermMetaData subtract(TermMetaData dec);
 
-  /* return (this + inc), if possible */
+  /* return a cloned instance,
+   * for monotonic fields, the values are (this + inc) */
   public abstract TermMetaData add(TermMetaData inc);
+
+  /* return current instance,
+   * for 'empty' fields in 'this', pad with values from its precedent 
+   * e.g. in usual cases, value of an 'empty' field is -1 */
+  public abstract TermMetaData pad(TermMetaData pre);
+
 
   public abstract void write(DataOutput out, FieldInfo info, TempTermState state) throws IOException;
 

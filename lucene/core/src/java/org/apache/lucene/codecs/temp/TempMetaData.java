@@ -55,22 +55,23 @@ final class TempMetaData extends TermMetaData {
   }
 
   /* delta-encoding, only works on monotonical part */
-  public TermMetaData subtract(TermMetaData _inc) {
-    TempMetaData inc = (TempMetaData) _inc;
+  public TermMetaData subtract(TermMetaData _dec) {
+    TempMetaData dec = (TempMetaData) _dec;
     TempMetaData ret = (TempMetaData)super.clone();
-    if (ret.singletonDocID != -1) {  // current MetaData have no valid docFP, copy it so delta=0
+    if (ret.singletonDocID != -1) {
       ret.docStartFP = 0;
     } else {
-      assert inc.docStartFP <= ret.docStartFP;
-      ret.docStartFP -= inc.docStartFP;
+      assert dec.docStartFP > 0;
+      assert dec.docStartFP <= ret.docStartFP;
+      ret.docStartFP -= dec.docStartFP;
     }
     if (ret.posStartFP != -1) {
-      assert inc.posStartFP <= ret.posStartFP;
-      ret.posStartFP -= inc.posStartFP;
+      assert dec.posStartFP <= ret.posStartFP;
+      ret.posStartFP -= dec.posStartFP;
     }
-    if (ret.payStartFP != -1 && inc.payStartFP != -1) {
-      assert inc.payStartFP <= ret.payStartFP;
-      ret.payStartFP -= inc.payStartFP;
+    if (ret.payStartFP != -1 && dec.payStartFP != -1) {
+      assert dec.payStartFP <= ret.payStartFP;
+      ret.payStartFP -= dec.payStartFP;
     }
     return ret;
   }
@@ -108,6 +109,19 @@ final class TempMetaData extends TermMetaData {
       } else {
         ret.payStartFP = inc.payStartFP;
       }
+    }
+    return ret;
+  }
+
+  @Override
+  public TermMetaData pad(TermMetaData _pre) {
+    TempMetaData pre = (TempMetaData) _pre;
+    TempMetaData ret = this;
+    if (ret.singletonDocID != -1) {
+      ret.docStartFP = pre.docStartFP;
+    }
+    if (pre.payStartFP != -1 && ret.payStartFP == -1) {
+      ret.payStartFP = pre.payStartFP;
     }
     return ret;
   }
