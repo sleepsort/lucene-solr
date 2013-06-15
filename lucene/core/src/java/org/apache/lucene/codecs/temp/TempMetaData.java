@@ -43,8 +43,8 @@ final class TempMetaData extends TermMetaData {
   TempMetaData() {
     docStartFP = 0;
     posStartFP = 0;
-    payStartFP = 0;
-    singletonDocID = 0;
+    payStartFP = -1;
+    singletonDocID = -1;
   }
 
   TempMetaData(long docStartFP, long posStartFP, long payStartFP, long skipOffset, long lastPosBlockOffset, int singletonDocID) {
@@ -109,6 +109,14 @@ final class TempMetaData extends TermMetaData {
     }
     return ret;
   }
+  @Override
+  public TermMetaData clear() {
+    this.docStartFP = 0;
+    this.posStartFP = 0;
+    this.payStartFP = -1;
+    this.singletonDocID = -1;
+    return this;
+  }
 
   @Override
   // nocommit: quite stupid we have to calculate indexOptions here, 
@@ -143,7 +151,6 @@ final class TempMetaData extends TermMetaData {
 
   @Override
   public void read(DataInput in, FieldInfo info, TempTermState state) throws IOException {
-    final boolean isFirstTerm = state.termBlockOrd == 0;
     final IndexOptions indexOptions = info.getIndexOptions();
     boolean fieldHasFreqs = indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS) >= 0;
     boolean fieldHasPositions = indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
@@ -152,46 +159,25 @@ final class TempMetaData extends TermMetaData {
 
     if (state.docFreq == 1) {
       singletonDocID = in.readVInt();
-      if (isFirstTerm) {
-        docStartFP = 0;
-      } else {
-      }
     } else {
       singletonDocID = -1;
-      if (isFirstTerm) {
-        docStartFP = in.readVLong();
-      } else {
-        docStartFP += in.readVLong();
-      }
+      docStartFP += in.readVLong();
     }
     if (fieldHasPositions) {
-      if (isFirstTerm) {
-        posStartFP = in.readVLong();
-      } else {
-        posStartFP += in.readVLong();
-      }
+      posStartFP += in.readVLong();
       if (state.totalTermFreq > BLOCK_SIZE) {
         lastPosBlockOffset = in.readVLong();
       } else {
         lastPosBlockOffset = -1;
       }
       if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
-        if (isFirstTerm) {
-          payStartFP = in.readVLong();
+        if (payStartFP != -1) {
+          payStartFP += in.readVLong();
         } else {
-          if (payStartFP == -1) {  // fucking point, the *first* one with payload
-            payStartFP = in.readVLong();
-          } else {
-            payStartFP += in.readVLong();
-          }
-        }
-      } else {
-        if (isFirstTerm) {
-          payStartFP = -1;  // only once set as -1, at most once
+          payStartFP = in.readVLong();
         }
       }
     }
-
     if (state.docFreq > BLOCK_SIZE) {
       skipOffset = in.readVLong();
     } else {

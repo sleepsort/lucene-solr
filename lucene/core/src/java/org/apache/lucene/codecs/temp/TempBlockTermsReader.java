@@ -621,7 +621,7 @@ public class TempBlockTermsReader extends FieldsProducer {
 
         FST.Arc<BytesRef> arc;
 
-        final TempTermState termState;
+        final TempBlockTermState termState;
 
         // Cumulative output so far
         BytesRef outputPrefix;
@@ -635,7 +635,7 @@ public class TempBlockTermsReader extends FieldsProducer {
 
         public Frame(int ord) throws IOException {
           this.ord = ord;
-          termState = new TempTermState();
+          termState = new TempBlockTermState();
           termState.meta = postingsReader.newTermMetaData();
           termState.totalTermFreq = -1;
         }
@@ -806,8 +806,9 @@ public class TempBlockTermsReader extends FieldsProducer {
           // postings impl can look at this
           termState.termBlockOrd = metaDataUpto;
 
-          // nocommit: might reuse in upper level?
-          TermMetaData delta = postingsReader.newTermMetaData();
+          if (termState.termBlockOrd == 0) {
+            termState.meta.clear();
+          }
 
           // TODO: better API would be "jump straight to term=N"???
           while (metaDataUpto < limit) {
@@ -823,15 +824,11 @@ public class TempBlockTermsReader extends FieldsProducer {
 
             // decode stats
             termState.docFreq = statsReader.readVInt();
-            //if (DEBUG) System.out.println("    dF=" + state.docFreq);
             if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
               termState.totalTermFreq = termState.docFreq + statsReader.readVLong();
-              //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
             }
 
             // decode metadata
-            //delta.read(bytesReader, fieldInfo, termState);
-            //termState.meta = delta.add(termState.meta);
             termState.meta.read(bytesReader, fieldInfo, termState);
             
             metaDataUpto++;
@@ -2236,7 +2233,7 @@ public class TempBlockTermsReader extends FieldsProducer {
         // }
         assert clearEOF();
         if (target.compareTo(term) != 0 || !termExists) {
-          assert otherState != null && otherState instanceof TempTermState;
+          assert otherState != null && otherState instanceof TempBlockTermState;
           currentFrame = staticFrame;
           currentFrame.state.copyFrom(otherState);
           term.copyBytes(target);
@@ -2324,7 +2321,7 @@ public class TempBlockTermsReader extends FieldsProducer {
         // metaData
         int metaDataUpto;
 
-        final TempTermState state;
+        final TempBlockTermState state;
 
         // buffer current block of term metadata
         ByteArrayDataInput bytesReader;
@@ -2332,7 +2329,7 @@ public class TempBlockTermsReader extends FieldsProducer {
 
         public Frame(int ord) throws IOException {
           this.ord = ord;
-          state = new TempTermState();
+          state = new TempBlockTermState();
           state.meta = postingsReader.newTermMetaData();
           state.totalTermFreq = -1;
         }
@@ -2629,8 +2626,9 @@ public class TempBlockTermsReader extends FieldsProducer {
           // postings impl can look at this
           state.termBlockOrd = metaDataUpto;
 
-          // nocommit: might reuse in upper level?
-          TermMetaData delta = postingsReader.newTermMetaData();
+          if (state.termBlockOrd == 0) {
+            state.meta.clear();
+          }
       
           // TODO: better API would be "jump straight to term=N"???
           while (metaDataUpto < limit) {
@@ -2646,15 +2644,11 @@ public class TempBlockTermsReader extends FieldsProducer {
             
             // decode stats
             state.docFreq = statsReader.readVInt();
-            //if (DEBUG) System.out.println("    dF=" + state.docFreq);
             if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
               state.totalTermFreq = state.docFreq + statsReader.readVLong();
-              //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
             }
 
             // decode metadata
-            //delta.read(bytesReader, fieldInfo, state);
-            //state.meta = delta.add(state.meta);
             state.meta.read(bytesReader, fieldInfo, state);
 
             metaDataUpto++;

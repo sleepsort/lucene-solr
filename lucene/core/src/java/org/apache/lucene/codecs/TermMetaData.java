@@ -52,6 +52,9 @@ public abstract class TermMetaData implements Cloneable {
    * e.g. in usual cases, value of an 'empty' field is -1 */
   public abstract TermMetaData pad(TermMetaData pre);
 
+  /* return current instance,
+   * clear all fields so that this.equals(TermMetaData()) */
+  public abstract TermMetaData clear();
 
   public abstract void write(DataOutput out, FieldInfo info, TempTermState state) throws IOException;
 
