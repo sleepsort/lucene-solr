@@ -56,9 +56,6 @@ public abstract class TempPostingsReaderBase implements Closeable {
   /** Return a newly created empty TermMetaData */
   public abstract TermMetaData newTermMetaData() throws IOException;
 
-  /** Actually decode metadata for next term */
-  public abstract void nextTerm(FieldInfo fieldInfo, TempTermState state, ByteArrayDataInput bytesReader) throws IOException;
-
   /** Must fully consume state, since after this call that
    *  TermState may be reused. */
   public abstract DocsEnum docs(FieldInfo fieldInfo, TempTermState state, Bits skipDocs, DocsEnum reuse, int flags) throws IOException;

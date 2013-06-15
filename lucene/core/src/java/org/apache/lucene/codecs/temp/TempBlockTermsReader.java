@@ -58,6 +58,7 @@ import org.apache.lucene.util.fst.Util;
 import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.TempPostingsReaderBase;
 import org.apache.lucene.codecs.CodecUtil;
+import org.apache.lucene.codecs.TermMetaData;
 
 /** A block-based terms index and dictionary that assigns
  *  terms to variable length blocks according to how they
@@ -793,6 +794,8 @@ public class TempBlockTermsReader extends FieldsProducer {
           return isLeafBlock ? nextEnt : termState.termBlockOrd;
         }
 
+        // TODO: this actually decodes two kinds of blocks: 
+        // stats as well as metadata
         public void decodeMetaData() throws IOException {
 
           // lazily catch up on metadata decode:
@@ -802,7 +805,10 @@ public class TempBlockTermsReader extends FieldsProducer {
           // We must set/incr state.termCount because
           // postings impl can look at this
           termState.termBlockOrd = metaDataUpto;
-      
+
+          // nocommit: might reuse in upper level?
+          TermMetaData delta = postingsReader.newTermMetaData();
+
           // TODO: better API would be "jump straight to term=N"???
           while (metaDataUpto < limit) {
 
@@ -814,6 +820,8 @@ public class TempBlockTermsReader extends FieldsProducer {
 
             // TODO: if docFreq were bulk decoded we could
             // just skipN here:
+
+            // decode stats
             termState.docFreq = statsReader.readVInt();
             //if (DEBUG) System.out.println("    dF=" + state.docFreq);
             if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
@@ -821,7 +829,11 @@ public class TempBlockTermsReader extends FieldsProducer {
               //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
             }
 
-            postingsReader.nextTerm(fieldInfo, termState, bytesReader);
+            // decode metadata
+            //delta.read(bytesReader, fieldInfo, termState);
+            //termState.meta = delta.add(termState.meta);
+            termState.meta.read(bytesReader, fieldInfo, termState);
+            
             metaDataUpto++;
             termState.termBlockOrd++;
           }
@@ -2616,6 +2628,9 @@ public class TempBlockTermsReader extends FieldsProducer {
           // We must set/incr state.termCount because
           // postings impl can look at this
           state.termBlockOrd = metaDataUpto;
+
+          // nocommit: might reuse in upper level?
+          TermMetaData delta = postingsReader.newTermMetaData();
       
           // TODO: better API would be "jump straight to term=N"???
           while (metaDataUpto < limit) {
@@ -2628,6 +2643,8 @@ public class TempBlockTermsReader extends FieldsProducer {
 
             // TODO: if docFreq were bulk decoded we could
             // just skipN here:
+            
+            // decode stats
             state.docFreq = statsReader.readVInt();
             //if (DEBUG) System.out.println("    dF=" + state.docFreq);
             if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
@@ -2635,7 +2652,11 @@ public class TempBlockTermsReader extends FieldsProducer {
               //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
             }
 
-            postingsReader.nextTerm(fieldInfo, state, bytesReader);
+            // decode metadata
+            //delta.read(bytesReader, fieldInfo, state);
+            //state.meta = delta.add(state.meta);
+            state.meta.read(bytesReader, fieldInfo, state);
+
             metaDataUpto++;
             state.termBlockOrd++;
           }

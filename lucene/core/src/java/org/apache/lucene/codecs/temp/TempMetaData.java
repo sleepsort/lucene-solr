@@ -16,6 +16,8 @@ package org.apache.lucene.codecs.temp;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import static org.apache.lucene.codecs.lucene41.Lucene41PostingsFormat.BLOCK_SIZE;
+
 import java.io.IOException;
 
 import org.apache.lucene.codecs.TermMetaData;
@@ -61,7 +63,7 @@ final class TempMetaData extends TermMetaData {
     if (ret.singletonDocID != -1) {
       ret.docStartFP = 0;
     } else {
-      assert dec.docStartFP > 0;
+      assert dec.docStartFP >= 0;
       assert dec.docStartFP <= ret.docStartFP;
       ret.docStartFP -= dec.docStartFP;
     }
@@ -77,6 +79,7 @@ final class TempMetaData extends TermMetaData {
   }
 
   @Override
+  // nocommit: maybe an 'addself' will be more commonly used
   public TermMetaData add(TermMetaData _inc) {
     TempMetaData inc = (TempMetaData) _inc;
     TempMetaData ret = (TempMetaData)super.clone();
@@ -88,27 +91,8 @@ final class TempMetaData extends TermMetaData {
     if (ret.posStartFP != -1) {
       ret.posStartFP += inc.posStartFP;
     }
-    // nocommit: not symmetric with those lines in subtract... ,
-    // the deep reason is: during writing, we depends on the '-1' values 
-    // to see whether to write them...
-    //
-    // Here, the use of subtract() & add() are quite different:
-    // subtract() will get the delta value to *write* to disk, 
-    //            so the format must be exactly the same as a pendingTerm in 
-    //            Lucene41PostingsWriter.flushTermBlock()
-    // add() will try to pass the 'lastPayStartFP' along the consumed metadata,
-    //       so the metadata returned by 'add' will *never* be written to disk.
-    // for example, whether we have payStartFP depends on the totalTermFreq of a term,
-    // like for term A,B,C, A & C has payStartFP, but B doesn't, so, 
-    // the payStartFP returned by B.subtract(A) should be -1, otherwise the write will stupidly write another VLong,
-    // the payStartFP returned by B.subtract(A).add(A) should be the same as A
-    //
-    if (inc.payStartFP != -1) {
-      if (ret.payStartFP != -1) {
+    if (ret.payStartFP != -1 && inc.payStartFP != -1) {
         ret.payStartFP += inc.payStartFP;
-      } else {
-        ret.payStartFP = inc.payStartFP;
-      }
     }
     return ret;
   }
@@ -127,8 +111,9 @@ final class TempMetaData extends TermMetaData {
   }
 
   @Override
-  // nocommit: should TermState be glued with field info? quite stupid to calculate indexOptions here
-  // but we're silly calculating this in Lucenen41PSTR as well..
+  // nocommit: quite stupid we have to calculate indexOptions here, 
+  // (but we have to  calculate this in Lucenen41PSTR as well... 
+  //  maybe we need more has*() APIs from fieldinfo()?)
   public void write(DataOutput out, FieldInfo info, TempTermState state) throws IOException {
     final IndexOptions indexOptions = info.getIndexOptions();
     boolean fieldHasFreqs = indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS) >= 0;
@@ -158,6 +143,64 @@ final class TempMetaData extends TermMetaData {
 
   @Override
   public void read(DataInput in, FieldInfo info, TempTermState state) throws IOException {
+    final boolean isFirstTerm = state.termBlockOrd == 0;
+    final IndexOptions indexOptions = info.getIndexOptions();
+    boolean fieldHasFreqs = indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS) >= 0;
+    boolean fieldHasPositions = indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
+    boolean fieldHasOffsets = indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
+    boolean fieldHasPayloads = info.hasPayloads();
+
+    if (isFirstTerm) {
+      if (state.docFreq == 1) {
+        singletonDocID = in.readVInt();
+        docStartFP = 0;
+      } else {
+        singletonDocID = -1;
+        docStartFP = in.readVLong();
+      }
+      if (fieldHasPositions) {
+        posStartFP = in.readVLong();
+        if (state.totalTermFreq > BLOCK_SIZE) {
+          lastPosBlockOffset = in.readVLong();
+        } else {
+          lastPosBlockOffset = -1;
+        }
+        if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
+          payStartFP = in.readVLong();
+        } else {
+          payStartFP = -1;
+        }
+      }
+    } else {
+      if (state.docFreq == 1) {
+        singletonDocID = in.readVInt();
+      } else {
+        singletonDocID = -1;
+        docStartFP += in.readVLong();
+      }
+      if (fieldHasPositions) {
+        posStartFP += in.readVLong();
+        if (state.totalTermFreq > BLOCK_SIZE) {
+          lastPosBlockOffset = in.readVLong();
+        } else {
+          lastPosBlockOffset = -1;
+        }
+        if ((fieldHasPayloads || fieldHasOffsets) && state.totalTermFreq >= BLOCK_SIZE) {
+          long delta = in.readVLong();
+          if (payStartFP == -1) {
+            payStartFP = delta;
+          } else {
+            payStartFP += delta;
+          }
+        }
+      }
+    }
+
+    if (state.docFreq > BLOCK_SIZE) {
+      skipOffset = in.readVLong();
+    } else {
+      skipOffset = -1;
+    }
   }
 
   @Override

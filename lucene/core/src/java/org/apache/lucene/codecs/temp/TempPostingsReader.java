@@ -155,69 +155,6 @@ public final class TempPostingsReader extends TempPostingsReaderBase {
   }
 
   @Override
-  public void nextTerm(FieldInfo fieldInfo, TempTermState termState, ByteArrayDataInput bytesReader)
-    throws IOException {
-    final TempMetaData meta = (TempMetaData) termState.meta;
-    final boolean isFirstTerm = termState.termBlockOrd == 0;
-    final boolean fieldHasPositions = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
-    final boolean fieldHasOffsets = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
-    final boolean fieldHasPayloads = fieldInfo.hasPayloads();
-
-    final DataInput in = bytesReader;
-    if (isFirstTerm) {
-      if (termState.docFreq == 1) {
-        meta.singletonDocID = in.readVInt();
-        meta.docStartFP = 0;
-      } else {
-        meta.singletonDocID = -1;
-        meta.docStartFP = in.readVLong();
-      }
-      if (fieldHasPositions) {
-        meta.posStartFP = in.readVLong();
-        if (termState.totalTermFreq > BLOCK_SIZE) {
-          meta.lastPosBlockOffset = in.readVLong();
-        } else {
-          meta.lastPosBlockOffset = -1;
-        }
-        if ((fieldHasPayloads || fieldHasOffsets) && termState.totalTermFreq >= BLOCK_SIZE) {
-          meta.payStartFP = in.readVLong();
-        } else {
-          meta.payStartFP = -1;
-        }
-      }
-    } else {
-      if (termState.docFreq == 1) {
-        meta.singletonDocID = in.readVInt();
-      } else {
-        meta.singletonDocID = -1;
-        meta.docStartFP += in.readVLong();
-      }
-      if (fieldHasPositions) {
-        meta.posStartFP += in.readVLong();
-        if (termState.totalTermFreq > BLOCK_SIZE) {
-          meta.lastPosBlockOffset = in.readVLong();
-        } else {
-          meta.lastPosBlockOffset = -1;
-        }
-        if ((fieldHasPayloads || fieldHasOffsets) && termState.totalTermFreq >= BLOCK_SIZE) {
-          long delta = in.readVLong();
-          if (meta.payStartFP == -1) {
-            meta.payStartFP = delta;
-          } else {
-            meta.payStartFP += delta;
-          }
-        }
-      }
-    }
-
-    if (termState.docFreq > BLOCK_SIZE) {
-      meta.skipOffset = in.readVLong();
-    } else {
-      meta.skipOffset = -1;
-    }
-  }
-    
-  @Override
   public DocsEnum docs(FieldInfo fieldInfo, TempTermState termState, Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
     BlockDocsEnum docsEnum;
     if (reuse instanceof BlockDocsEnum) {
